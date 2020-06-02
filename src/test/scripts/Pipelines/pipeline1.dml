@@ -1,0 +1,239 @@
+#-------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+#-------------------------------------------------------------
+
+
+
+F = read($1, data_type="frame", format="csv", header=TRUE);
+
+# step 1 call dropInvalid
+# print("dataset "+toString(F))
+
+schema = F[1,] # get the schema from first row
+F = F[2:nrow(F),]
+print("schema "+toString(schema))
+F = dropInvalid(F, schema)
+mask = matrix(0,1,ncol(F))
+s = ""
+for(i in 1: ncol(F))
+{
+  if(as.scalar(schema[1,i]) == "STRING" | as.scalar(schema[1,i]) == "BOOLEAN" )
+  {
+    mask[1, i] = 1
+    s = s + i+","  
+  }
+}
+
+# schema = detectSchema(F)
+# print("schema "+toString(schema))
+# recode data frame
+jspecR = "{ids:true, recode:["+s+"]}";
+[X, M] = transformencode(target=F, spec=jspecR);
+
+# get the stats
+mv_mask = is.na(X)
+XO = X
+X = replace(target= X, pattern = NaN, replacement = 0)
+
+colMode = mask * colMode(X)
+colMean = (mask == 0) * colMeans(X)
+colAvg = colMode + colMean
+print("col Avg"+toString(colAvg))
+
+
+# mean/mode imputation 
+X += mv_mask * colAvg
+# print("X \n"+toString(X))
+
+X = outlierBySd(X, 2, 3, FALSE )
+
+
+# classify imputed data
+iter = 30
+ac = classify(X, iter)
+print("Accuracy step 1 \n"+toString(ac))
+
+
+
+# # step 2 fill in missing values with mean or mode
+# iter = 30
+# ac = matrix(0,iter,2)
+# X = imputeByMean(XO)
+# ac = classify(X, iter)
+# print("Accuracy (1) \n"+toString(ac))  
+  
+# # step 1-1 fill in missing values with median
+# iter = 30
+# ac = matrix(0,iter,2)
+# X = imputeByMedian(XO)
+# ac = classify(X, iter)
+# print("Accuracy (1-1) \n"+toString(ac))  
+  
+  
+  
+  
+  
+  
+  
+# write(X, $2, format="csv", sep=",")
+  
+# These private function are used to impute values and classification
+##################################################################################
+imputeByMean = function(Matrix[Double] X)
+return(Matrix[Double] X)
+{
+  Mask = is.nan(X)
+  X = replace(target=X, pattern=NaN, replacement=0)
+  Mask = Mask * (colMeans(X))
+  X = X + Mask 
+}
+  
+imputeByMedian = function(Matrix[Double] X)
+return(Matrix[Double] X)
+{
+  cols = ncol(X)
+  colMedian = matrix(0, 1, cols)
+  X = replace(target=X, pattern=NaN, replacement=0)
+  Mask = is.nan(X)
+  parfor(i in 1:cols)
+    colMedian[, i] = median(X[,i])
+  Mask = Mask * colMedian
+  X = X + Mask
+}
+
+
+classify =  function(Matrix[Double] X, Integer iter)
+return (Matrix[Double] ac){
+  ac = matrix(0,iter,2)
+  lam = 0.1
+  
+  # split data into train and test
+  # temp = rand(rows=nrow(X), cols=1, min = 0, max = 1, sparsity=1) <= 0.3
+  # tempI = temp == 0
+  # sel = diag(temp)
+  # selI = diag(tempI)
+  # sel = removeEmpty(target = sel, margin = "rows")
+  # selI = removeEmpty(target = selI, margin = "rows")
+  # testSet = sel %*% X
+  # trainSet = selI %*% X
+
+  # nTrain = nrow(trainSet)
+  # dTrain = ncol(trainSet)
+  # nTest = nrow(testSet)
+  # dTest = ncol(testSet)
+
+  for(i in 1: iter)
+  {
+    
+    temp = rand(rows=nrow(X), cols=1, min = 0, max = 1, sparsity=1) <= 0.3
+    tempI = temp == 0
+    sel = diag(temp)
+    selI = diag(tempI)
+    sel = removeEmpty(target = sel, margin = "rows")
+    selI = removeEmpty(target = selI, margin = "rows")
+    testSet = sel %*% X
+    trainSet = selI %*% X
+
+    nTrain = nrow(trainSet)
+    dTrain = ncol(trainSet)
+    nTest = nrow(testSet)
+    dTest = ncol(testSet)
+    
+    train_X = trainSet[, 2:dTrain]
+    train_Y = trainSet[, 1] + 1 # to get rid of zero in class label
+ 
+    test_X = testSet[, 2:dTest]
+    test_Y = testSet[, 1] + 1 # to get rid of zero in class label
+    # print("lam "+lam)
+    betas= multiLogReg(X=train_X,  Y=train_Y, icpt = 1, tol = 0.000000001, reg = lam , maxi = 100, maxii=0, verbose=FALSE)
+    [prob, y, accuracy] = multiLogRegPredict(X=test_X, B=betas, Y=test_Y, verbose=FALSE)
+    ac[i, 1] = lam
+    ac[i, 2] = accuracy
+    lam = lam + 0.05
+  }
+}
+
+rawStat = function(Frame[String] F)
+{
+  # print("dataset "+toString(F))
+
+  schema = detectSchema(F)
+  # print("schema "+toString(schema))
+
+  mask = matrix(0,1,ncol(F))
+  s = ""
+  for(i in 1: ncol(F))
+  {
+    if(as.scalar(schema[1,i]) == "STRING" | as.scalar(schema[1,i]) == "BOOLEAN" )
+    {
+      mask[1, i] = 1
+      s = s + i+","  
+    }
+  }
+  print("string columns raw "+s)
+
+  # recode data frame
+  jspecR = "{ids:true, recode:["+s+"]}";
+  [X, M] = transformencode(target=F, spec=jspecR);
+  
+  # print("transformed data "+toString(X))
+
+  # classify raw data
+  iter = 30
+  ac = classify(X, iter)
+  print("Accuracy raw \n"+toString(ac))
+
+
+  # get the stats
+  no_of_mv = is.na(X)
+  XO = X
+  X = replace(target= X, pattern = NaN, replacement = 0)
+  colMin = colMins(X)
+  colMax = colMaxs(X)
+  colMean = colMeans(X)
+  colSd = colSds(X)
+  count3sdplus = sum(X > (colMean + 3*colSd )) 
+  count3sdminus = sum(X < (colMean - 3*colSd )) 
+  print("----------summary----------")
+  print("row x cols "+nrow(X)+" * "+ncol(X))
+  print("col mask "+toString(mask))
+  print("missing val \n"+sum(no_of_mv)+" or "+((sum(no_of_mv) / nrow(X) * ncol(X)) )+" * 100 %")
+  print("col mins \n"+toString(colMin))
+  print("col maxs \n"+toString(colMax))
+  print("col mean \n"+toString(colMean))
+  print("col stdev \n"+toString(colSd))
+  print("values greater than 3 stdev \n"+count3sdplus)
+  print("values less than 3 stdev \n"+count3sdminus)
+  print("total outlier \n"+(count3sdminus+count3sdplus))
+
+}
+
+colMode = function(Matrix[Double] F)
+return (Matrix[Double] mode)
+{
+  mode = matrix(0,1, ncol(F))
+  for(i in 1: ncol(F))
+  {
+    tmp = removeEmpty(target = F[,i], margin = "rows")
+    ctab = table(tmp, 1, nrow(tmp), 1)
+    mode[1, i] = as.scalar(rowIndexMax(t(ctab)))
+  }
+  print("mode "+toString(mode))
+}

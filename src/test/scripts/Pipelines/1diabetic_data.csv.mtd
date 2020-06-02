@@ -1,0 +1,10 @@
+{
+    "data_type": "frame",
+    "format": "csv",
+    "header": true,
+    "schema": "string,int32,int32,string,string,string,string,int32,int32,int32,int32,string,string,int32,int32,int32,int32,int32,int32,int32,int32,int32,int32,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string,string",
+    "sep": ",",
+    "description": {
+        "author": "SystemDS"
+    }
+}
