@@ -21,70 +21,90 @@
 
 
 
-F = read($1, data_type="frame", format="csv", header=TRUE);
+F = read($1, data_type="frame", format="csv", header=$2);
 
-# step 1 call dropInvalid
-# print("dataset "+toString(F))
+# print("this is F"+toString(F))
+rawStat(F)
+pipeline1(F)
+# # step 1 call dropInvalid
+# schema = F[1,] # get the schema from first row
+# F = F[2:nrow(F),]
 
-schema = F[1,] # get the schema from first row
-F = F[2:nrow(F),]
-print("schema "+toString(schema))
-F = dropInvalid(F, schema)
-mask = matrix(0,1,ncol(F))
-s = ""
-for(i in 1: ncol(F))
-{
-  if(as.scalar(schema[1,i]) == "STRING" | as.scalar(schema[1,i]) == "BOOLEAN" )
-  {
-    mask[1, i] = 1
-    s = s + i+","  
-  }
-}
+# F = dropInvalid(F, schema)
 
-# schema = detectSchema(F)
-# print("schema "+toString(schema))
-# recode data frame
-jspecR = "{ids:true, recode:["+s+"]}";
-[X, M] = transformencode(target=F, spec=jspecR);
+# mask = matrix(0,1,ncol(F))
+# s = ""
+# for(i in 2: ncol(F))
+# {
+  # if(as.scalar(schema[1,i]) == "STRING" | as.scalar(schema[1,i]) == "BOOLEAN" )
+  # {
+    # mask[1, i] = 1
+    # s = s + i+","     
+  # }
+# }
 
-# get the stats
-mv_mask = is.na(X)
-XO = X
-X = replace(target= X, pattern = NaN, replacement = 0)
-
-colMode = mask * colMode(X)
-colMean = (mask == 0) * colMeans(X)
-colAvg = colMode + colMean
-print("col Avg"+toString(colAvg))
+# # recode data frame
+# jspecR = "{ids:true, recode:["+(s+"1")+"]}";
+# [X, M] = transformencode(target=F, spec=jspecR);
 
 
-# mean/mode imputation 
-X += mv_mask * colAvg
-# print("X \n"+toString(X))
+# Y = X[, 1]
+# X = X[, 2:ncol(X)] 
+# mask = mask[, 2:ncol(mask)]
+# mv_mask = is.na(X)
+# XO = X
 
-X = outlierBySd(X, 2, 3, FALSE )
+# # step 2 remove outliers
+# X = outlierBySd(X, 3, 2,10, FALSE )
+# # step 3 impute with mice
+# [a, b] = mice(as.frame(X), mask, 3, 3, FALSE)
+# X = as.matrix(b)
+# # step 4 remove outliers again
+# X = outlierBySd(X, 3, 2,10, FALSE )
+# X = replace(target= X, pattern = NaN, replacement = 0)
+# # step 5 impute missing value with mean or mode
+# colMode = colMode(X * mask)
+# colMean = (mask == 0) * colMeans(X)
+# colAvg = colMode + colMean
+# X += mv_mask * colAvg
 
-
-# classify imputed data
-iter = 30
-ac = classify(X, iter)
-print("Accuracy step 1 \n"+toString(ac))
-
-
-
-# # step 2 fill in missing values with mean or mode
-# iter = 30
-# ac = matrix(0,iter,2)
-# X = imputeByMean(XO)
-# ac = classify(X, iter)
-# print("Accuracy (1) \n"+toString(ac))  
+# if(sum(mask) > 0)
+# {
+  # # dummycode data frame
+  # jspecR = "{ids:true, dummycode:["+s+"]}";
+  # [dX, dM] = transformencode(target=as.frame(cbind(Y,X)), spec=jspecR);
   
-# # step 1-1 fill in missing values with median
-# iter = 30
-# ac = matrix(0,iter,2)
-# X = imputeByMedian(XO)
-# ac = classify(X, iter)
-# print("Accuracy (1-1) \n"+toString(ac))  
+# }
+# else dX = cbind(Y,X)
+
+# print("this is dX\n"+toString(dX, rows=2))
+
+# # classify data
+# iter = 10
+# ac = classify(dX, iter)
+# print("Accuracy step  \n"+toString(ac))
+
+
+# # # classify imputed data and removed outliers
+# # iter = 30
+# # ac = classify(X, iter)
+# # print("Accuracy step 2 \n"+toString(ac))
+
+
+
+# # # step 2 fill in missing values with mean or mode
+# # iter = 30
+# # ac = matrix(0,iter,2)
+# # X = imputeByMean(XO)
+# # ac = classify(X, iter)
+# # print("Accuracy (1) \n"+toString(ac))  
+  
+# # # step 1-1 fill in missing values with median
+# # iter = 30
+# # ac = matrix(0,iter,2)
+# # X = imputeByMedian(XO)
+# # ac = classify(X, iter)
+# # print("Accuracy (1-1) \n"+toString(ac))  
   
   
   
@@ -122,9 +142,12 @@ return(Matrix[Double] X)
 classify =  function(Matrix[Double] X, Integer iter)
 return (Matrix[Double] ac){
   ac = matrix(0,iter,2)
-  lam = 0.1
+  if(iter == 1)
+    lam = 0.3
+  else
+    lam = 0.1
   
-  # split data into train and test
+  # # split data into train and test
   # temp = rand(rows=nrow(X), cols=1, min = 0, max = 1, sparsity=1) <= 0.3
   # tempI = temp == 0
   # sel = diag(temp)
@@ -141,7 +164,7 @@ return (Matrix[Double] ac){
 
   for(i in 1: iter)
   {
-    
+
     temp = rand(rows=nrow(X), cols=1, min = 0, max = 1, sparsity=1) <= 0.3
     tempI = temp == 0
     sel = diag(temp)
@@ -157,29 +180,31 @@ return (Matrix[Double] ac){
     dTest = ncol(testSet)
     
     train_X = trainSet[, 2:dTrain]
-    train_Y = trainSet[, 1] + 1 # to get rid of zero in class label
+    train_Y = trainSet[, 1] # to get rid of zero in class label
  
     test_X = testSet[, 2:dTest]
-    test_Y = testSet[, 1] + 1 # to get rid of zero in class label
-    # print("lam "+lam)
-    betas= multiLogReg(X=train_X,  Y=train_Y, icpt = 1, tol = 0.000000001, reg = lam , maxi = 100, maxii=0, verbose=FALSE)
+    test_Y = testSet[, 1]  # to get rid of zero in class label
+
+    # print("train X\n"+toString(train_X))
+    # print("train Y\n"+toString(train_Y))
+    betas= multiLogReg(X=train_X,  Y=train_Y, icpt = 2, tol = 0.0001, reg = lam , maxi = 100, maxii=0, verbose=FALSE)
     [prob, y, accuracy] = multiLogRegPredict(X=test_X, B=betas, Y=test_Y, verbose=FALSE)
     ac[i, 1] = lam
     ac[i, 2] = accuracy
-    lam = lam + 0.05
+    lam = lam + 0.2
   }
 }
 
 rawStat = function(Frame[String] F)
 {
   # print("dataset "+toString(F))
-
+  F = F[2:nrow(F),]
   schema = detectSchema(F)
   # print("schema "+toString(schema))
 
   mask = matrix(0,1,ncol(F))
   s = ""
-  for(i in 1: ncol(F))
+  for(i in 2: ncol(F))
   {
     if(as.scalar(schema[1,i]) == "STRING" | as.scalar(schema[1,i]) == "BOOLEAN" )
     {
@@ -187,23 +212,29 @@ rawStat = function(Frame[String] F)
       s = s + i+","  
     }
   }
-  print("string columns raw "+s)
-
+  mask = mask[,2:ncol(mask)]
   # recode data frame
-  jspecR = "{ids:true, recode:["+s+"]}";
+  jspecR = "{ids:true, recode:["+s+"1"+"]}";
   [X, M] = transformencode(target=F, spec=jspecR);
   
+  Y = X[, 1]
+  X = X[, 2:ncol(X)] 
   # print("transformed data "+toString(X))
 
+  if(sum(mask) > 0)
+  {
+    # dummycode data frame
+    jspecR = "{ids:true, dummycode:["+s+"]}";
+    [dX, dM] = transformencode(target=as.frame(cbind(Y,X)), spec=jspecR);
+  
+  }
+  else dX = cbind(Y,X)
   # classify raw data
   iter = 30
-  ac = classify(X, iter)
-  print("Accuracy raw \n"+toString(ac))
-
+  ac = classify(dX, iter)
 
   # get the stats
   no_of_mv = is.na(X)
-  XO = X
   X = replace(target= X, pattern = NaN, replacement = 0)
   colMin = colMins(X)
   colMax = colMaxs(X)
@@ -211,17 +242,21 @@ rawStat = function(Frame[String] F)
   colSd = colSds(X)
   count3sdplus = sum(X > (colMean + 3*colSd )) 
   count3sdminus = sum(X < (colMean - 3*colSd )) 
-  print("----------summary----------")
-  print("row x cols "+nrow(X)+" * "+ncol(X))
-  print("col mask "+toString(mask))
-  print("missing val \n"+sum(no_of_mv)+" or "+((sum(no_of_mv) / nrow(X) * ncol(X)) )+" * 100 %")
-  print("col mins \n"+toString(colMin))
-  print("col maxs \n"+toString(colMax))
-  print("col mean \n"+toString(colMean))
-  print("col stdev \n"+toString(colSd))
-  print("values greater than 3 stdev \n"+count3sdplus)
-  print("values less than 3 stdev \n"+count3sdminus)
-  print("total outlier \n"+(count3sdminus+count3sdplus))
+  log_str = "----------summary----------"
+  log_str = append(log_str, "row x cols "+nrow(X)+" * "+ncol(X))
+  log_str = append(log_str, "col mask "+toString(mask))
+  log_str = append(log_str, "missing val \n"+sum(no_of_mv)+" or "+(sum(no_of_mv)/(nrow(X) * ncol(X))+" * 100 %"))
+  log_str = append(log_str, "col mins \n"+toString(colMin))
+  log_str = append(log_str, "col maxs \n"+toString(colMax))
+  log_str = append(log_str, "col mean \n"+toString(colMean))
+  log_str = append(log_str, "col stdev \n"+toString(colSd))
+  log_str = append(log_str, "values greater than 3 stdev \n"+count3sdplus)
+  log_str = append(log_str, "values less than 3 stdev \n"+count3sdminus)
+  log_str = append(log_str, "total outlier \n"+(count3sdminus+count3sdplus))
+  ctab = table(Y, 1)
+  log_str = append(log_str,"instances in each class \n"+toString(ctab))
+  log_str = append(log_str,"accuracy with different lambda values \n"+toString(ac))
+  write(log_str, "D:/PhD TU Graz/Hand Curated Pipelines/output/"+$3+".txt")
 
 }
 
@@ -231,9 +266,81 @@ return (Matrix[Double] mode)
   mode = matrix(0,1, ncol(F))
   for(i in 1: ncol(F))
   {
-    tmp = removeEmpty(target = F[,i], margin = "rows")
-    ctab = table(tmp, 1, nrow(tmp), 1)
-    mode[1, i] = as.scalar(rowIndexMax(t(ctab)))
+    feature = F[,i]
+    if(sum(feature) > 0)
+    {
+      tmp = removeEmpty(target = feature , margin = "rows")
+      ctab = table(tmp, 1, nrow(tmp), 1)
+      mode[1, i] = as.scalar(rowIndexMax(t(ctab)))
+    }
   }
   print("mode "+toString(mode))
 }
+
+pipeline1 = function(Frame[String] F) #dropInvalid() -> outlierBySd(k = 3, repair = 2, iter = 10) -> mice() -> outlierBySd(3, 2, 10) -> mean/mode imputation
+# return (Matrix[Double] accuracy)
+{
+  
+  schema = F[1,] # get the schema from first row
+  F = F[2:nrow(F),]
+
+  F = dropInvalid(F, schema)
+
+  mask = matrix(0,1,ncol(F))
+  s = ""
+  for(i in 2: ncol(F))
+  {
+    if(as.scalar(schema[1,i]) == "STRING" | as.scalar(schema[1,i]) == "BOOLEAN" )
+    {
+      mask[1, i] = 1
+      s = s + i+","     
+    }
+  }
+
+  # recode data frame
+  jspecR = "{ids:true, recode:["+(s+"1")+"]}";
+  [X, M] = transformencode(target=F, spec=jspecR);
+
+
+  Y = X[, 1]
+  X = X[, 2:ncol(X)] 
+  mask = mask[, 2:ncol(mask)]
+  mv_mask = is.na(X)
+  XO = X
+
+  # step 2 remove outliers
+  X = outlierBySd(X, 3, 2,10, FALSE )
+  # step 3 impute with mice
+  [a, b] = mice(as.frame(X), mask, 3, 3, FALSE)
+  X = as.matrix(b)
+  # step 4 remove outliers again
+  X = outlierBySd(X, 3, 2,10, FALSE )
+  X = replace(target= X, pattern = NaN, replacement = 0)
+  # step 5 impute missing value with mean or mode
+  colMode = colMode(X * mask)
+  colMean = (mask == 0) * colMeans(X)
+  colAvg = colMode + colMean
+  X += mv_mask * colAvg
+
+  if(sum(mask) > 0)
+  {
+    # dummycode data frame
+    jspecR = "{ids:true, dummycode:["+s+"]}";
+    [dX, dM] = transformencode(target=as.frame(cbind(Y,X)), spec=jspecR);
+  
+  }
+  else dX = cbind(Y,X)
+  print("this is dX\n"+toString(dX, rows=2))
+
+  # classify data
+  iter = 30
+  accuracy = classify(dX, iter)
+  print("Accuracy step  \n"+toString(accuracy))
+  write(accuracy, "D:/PhD TU Graz/Hand Curated Pipelines/output/pipeline1"+$3+".txt")
+}
+
+
+
+
+# Rejected orders
+# mean/mode imputation -> outlierBySd (X, 2, 3, 10, FALSE)

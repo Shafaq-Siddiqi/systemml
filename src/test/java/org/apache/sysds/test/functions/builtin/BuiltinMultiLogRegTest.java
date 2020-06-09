@@ -34,12 +34,12 @@ public class BuiltinMultiLogRegTest extends AutomatedTestBase {
 	private final static String TEST_DIR = "functions/builtin/";
 	private static final String TEST_CLASS_DIR = TEST_DIR + BuiltinMultiLogRegTest.class.getSimpleName() + "/";
 
-	private final static double tol = 0.1;
+	private final static double tol = 0.000001;
 	private final static int rows = 1500;
 	private final static int colsX = 300;
 	private final static double sparse = 0.3;
-	private final static int maxIter = 10;
-	private final static int maxInnerIter = 2;
+	private final static int maxIter = 100;
+	private final static int maxInnerIter = 0;
 
 
 	@Override
@@ -70,7 +70,7 @@ public class BuiltinMultiLogRegTest extends AutomatedTestBase {
 	}
 	@Test
 	public void testMultiLogRegInterceptSpark2() {
-		runMultiLogeRegTest(2, tol, 1.0, maxIter, maxInnerIter, LopProperties.ExecType.SPARK);
+		runMultiLogeRegTest(2, tol, 0.3, maxIter, maxInnerIter, LopProperties.ExecType.CP);
 	}
 
 	private void runMultiLogeRegTest( int inc, double tol, double reg, int maxOut, int maxIn, LopProperties.ExecType instType) {

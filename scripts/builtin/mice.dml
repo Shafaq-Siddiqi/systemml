@@ -44,7 +44,7 @@
 s_mice= function(Frame[String] F, Matrix[Double] cMask, Integer iter = 3, Integer complete = 3, Boolean verbose = FALSE)
 return(Frame[String] dataset, Frame[String] singleSet)
 {
-
+  print("in mice")
   if(ncol(F) == 1)
     stop("invalid argument: can not apply mice on single column")
     
@@ -66,12 +66,12 @@ return(Frame[String] dataset, Frame[String] singleSet)
 
   if(nrow(cat) == ncol(F))
     cMask[1,ncol(cMask)] = 0
-  
+  print("mice mask \n"+toString(cMask))
   s=""
   for(i in 1: nrow(cat), check =0)
     s = s+as.integer(as.scalar(cat[i, 1]))+",";
   
-  
+  print("mice s"+s)
   # encoding categorical columns using recode transformation
   jspecR = "{ids:true, recode:["+s+"]}";
   [X, M] = transformencode(target=F, spec=jspecR);

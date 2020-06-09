@@ -67,13 +67,23 @@ public class PipelineTest extends AutomatedTestBase
 	}
 
 	@Test
-	public void test1() {
-		runIsCorrectTest(LopProperties.ExecType.CP);
+	public void testdiabetic() {
+		runIsCorrectTest("diabetic_data.csv", true, "Diabetic", LopProperties.ExecType.CP);
 	}
 
-	private void runIsCorrectTest(LopProperties.ExecType et)
+	@Test
+	public void testOzone() {
+		runIsCorrectTest("ozone.csv",false, "Ozone", LopProperties.ExecType.CP);
+	}
+
+	@Test
+	public void testAudit() {
+		runIsCorrectTest("audit_risk.csv",true, "Audit_Risk", LopProperties.ExecType.CP);
+	}
+
+	private void runIsCorrectTest(String dataset, boolean header, String dataName, LopProperties.ExecType et)
 	{
-		final String DATASET =  SCRIPT_DIR + TEST_DIR + "diabetic_data.csv";
+		final String DATASET =  SCRIPT_DIR + TEST_DIR + dataset;
 		Types.ExecMode platformOld = setExecMode(et);
 		boolean oldFlag = OptimizerUtils.ALLOW_ALGEBRAIC_SIMPLIFICATION;
 		boolean sparkConfigOld = DMLScript.USE_LOCAL_SPARK_CONFIG;
@@ -81,7 +91,7 @@ public class PipelineTest extends AutomatedTestBase
 			getAndLoadTestConfiguration(TEST_NAME);
 			String HOME = SCRIPT_DIR + TEST_DIR;
 			fullDMLScriptName = HOME + TEST_NAME + ".dml";
-			programArgs = new String[] {"-args", DATASET, output("B")};
+			programArgs = new String[] {"-exec", "singlenode","-args", DATASET, String.valueOf(header).toUpperCase(), dataName, output("B")};
 
 			runTest(true, false, null, -1);
 
