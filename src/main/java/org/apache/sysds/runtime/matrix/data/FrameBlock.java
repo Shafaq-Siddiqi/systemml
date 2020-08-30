@@ -1996,7 +1996,7 @@ public class FrameBlock implements CacheBlock, Externalizable  {
 				type = "INT";
 			} else if (schemaCol.contains("STRING")){
 				// In case of String columns, don't do any verification or replacements.
-				break;
+				continue;
 			} else{
 				type = schemaCol;
 			}
@@ -2008,8 +2008,9 @@ public class FrameBlock implements CacheBlock, Externalizable  {
 				String dataValue = obj.get(j).toString().trim().replace("\"", "").toLowerCase() ;
 
 				ValueType dataType = isType(dataValue);
-				if(!dataType.toString().contains(type) && !(dataType == ValueType.BOOLEAN && type == "INT")){
-					LOG.warn("Datatype detected: " + dataType + " where expected: " + schemaString[i] + " index: " + i + "," +j);
+
+				if(!dataType.toString().contains(type) && !(dataType == ValueType.BOOLEAN && type == "INT") &&  !(dataType == ValueType.BOOLEAN && type == "FP")){
+					//LOG.warn("Datatype detected: " + dataType + " where expected: " + schemaString[i] + " col: " + (i+1) + ", row:" +(j+1));
 
 					this.set(j,i,null);
 				}

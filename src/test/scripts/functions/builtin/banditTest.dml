@@ -1,0 +1,93 @@
+#-------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+#-------------------------------------------------------------
+
+X = read($1, data_type="matrix", format="csv", header=TRUE);
+primitives = read($2, data_type = "frame", format="csv", header= TRUE)
+param = read($3, data_type = "frame", format="csv", header= FALSE)
+y = X[, ncol(X)] + 1
+X = X[, 1:ncol(X)-1]
+
+numTrSamples = 1000;
+numValSamples = 1000;
+X_train = X[1:numTrSamples,];
+y_train = y[1:numTrSamples,];
+X_val = X[(numTrSamples+1):(numTrSamples+numValSamples+1),];
+y_val = y[(numTrSamples+1):(numTrSamples+numValSamples+1),];
+X_test = X[(numTrSamples+numValSamples+2):nrow(X),];
+y_test = y[(numTrSamples+numValSamples+2):nrow(X),];
+
+
+# iterative algorithms
+logical = as.frame("OTLR")
+# logical = cbind(logical, as.frame("OTLR"))
+logical = cbind(logical, as.frame("MVI"))
+# logical = cbind(logical, as.frame("CI"))
+
+cmask = matrix(0, 1, ncol(X))
+[pip, hp, acc] = bandit(X_train=X_train, Y_train=y_train, X_val = X_test, Y_val = y_test, mask=cmask, lp=logical, primitives=primitives, param=param,
+                  k=$4, verbose=TRUE);
+
+
+
+res = testBestPipeline(pip, hp, X_train, y_train, X_val, y_val, cmask)
+
+write(res, $5)
+
+
+
+testBestPipeline = function(Frame[Unknown] pip, Matrix[Double] hp, Matrix[Double] X_train, Matrix[Double] y_train, Matrix[Double] X_test, Matrix[Double] y_test, Matrix[Double] cmask)
+return (Boolean result){
+  ls = list();
+  i = 1
+  # construct the parameter list for best hyper-parameters
+  while(i <= ncol(hp))
+  {
+    if(as.scalar(hp[1, i]) == -1) 
+      ls = append(ls, as.matrix(-1)) 
+    else if(as.scalar(hp[1, i]) > 0)
+    {
+      end = as.integer(i+as.scalar(hp[1,i]))
+      mat = hp[1, i+1:end]
+      i = end 
+      ls = append(ls, mat)
+    }
+    i = i + 1
+  }
+
+  # classify without cleaning
+  betas = multiLogReg(X=X_train, Y=y_train, icpt=2, tol=1e-9, reg=1.2, maxi=100, maxii=0, verbose=FALSE)
+  [d_prob, d_yhat, d_accuracy] = multiLogRegPredict(X_test, betas, y_test, FALSE)
+  print("accuracy of test naive "+d_accuracy)
+  
+  while(FALSE){}
+  # clean using best pipeline
+  [X_train_clean, Y_train_clean] = executePipeline(pip[1,], X_train, y_train, cmask, ls, TRUE)
+  [X_test_clean, Y_test_clean] = executePipeline(pip[1,], X_test, y_test, cmask, ls, TRUE)
+
+  # classify after cleaning
+  betas = multiLogReg(X=X_train_clean, Y=Y_train_clean, icpt=2, tol=1e-9, reg=1.2, maxi=100, maxii=0, verbose=FALSE)
+  [c_prob, c_yhat, c_accuracy] = multiLogRegPredict(X_test_clean, betas, Y_test_clean, FALSE)
+  
+  print("accuracy of test  "+c_accuracy)
+  
+  result = c_accuracy > d_accuracy
+}
+

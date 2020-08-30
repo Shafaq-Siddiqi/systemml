@@ -38,6 +38,7 @@ public class BuiltinMiceTest extends AutomatedTestBase {
 	private static final String TEST_CLASS_DIR = TEST_DIR + BuiltinMiceTest.class.getSimpleName() + "/";
 
 	private final static String DATASET = SCRIPT_DIR +"functions/transform/input/ChickWeight.csv";
+//	private final static String DATASET = "D:/Workspace/Devlopment/out/diabeticPartialClean.csv";
 	private final static double eps = 0.16;
 	private final static int iter = 3;
 
@@ -81,6 +82,7 @@ public class BuiltinMiceTest extends AutomatedTestBase {
 	
 	private void runMiceNominalTest(double[][] mask, int testType, boolean lineage, LopProperties.ExecType instType) {
 		Types.ExecMode platformOld = setExecMode(instType);
+		setOutputBuffering(false);
 		try {
 			loadTestConfiguration(getTestConfiguration(TEST_NAME));
 			String HOME = SCRIPT_DIR + TEST_DIR;

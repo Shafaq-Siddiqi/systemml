@@ -46,6 +46,10 @@ m_mice= function(Matrix[Double] X, Matrix[Double] cMask, Integer iter = 3, Boole
   if(ncol(X) < 2)
     stop("MICE can not be applied on single vectors.
          expected number of columns > 1 found: "+ncol(X))
+  
+  if(ncol(cMask) != ncol(X))
+    stop("Dimension mismatch: the columns in X != columns in mask")
+  
     
   lastIndex = ncol(X);
   sumMax = sum(cMask);
@@ -56,7 +60,7 @@ m_mice= function(Matrix[Double] X, Matrix[Double] cMask, Integer iter = 3, Boole
     X = cbind(X, matrix(1, nrow(X), 1))
     cMask = cbind(cMask, matrix(ifelse(sumMax==0, 1, 0), 1, 1))
   }
-
+  print("mask "+toString(cMask))
   # separate categorical and continuous features
   nX = removeEmpty(target=X, margin="cols", select=(cMask==0))
   cX = removeEmpty(target=X, margin="cols", select= cMask)
@@ -100,14 +104,24 @@ m_mice= function(Matrix[Double] X, Matrix[Double] cMask, Integer iter = 3, Boole
     inverseMask = Mask1 == 0
     # OHE of categorical features
     [dX, dM] = transformencode(target=as.frame(X1), spec=jspecDC);
-    dist = (colMaxs(X1) * cMask) + (cMask == 0) # number of distinct items in categorical features
+    dist = colDist(X1, cMask) # number of distinct items in categorical features
+    print("dist \n"+toString(dist))
+    print("dX col \n"+ncol(dX))
+    while(FALSE){}
     i=1; j=1; in_c=1;
-
+    print("k "+k)
     while(i < ncol(dX))
     {
+      print("in "+i)
       j = (i + as.scalar(dist[1,in_c])) - 1 # index value for iterating OHE columns
+      print("before going in if")
+      print("mask row "+nrow(Mask1))
+      print("cmask row "+nrow(cMask))
+      while(FALSE){}
       if(sum(Mask1[, in_c]) > 0 & as.scalar(cMask[, in_c]) == 0) # impute numeric features
       {
+        print(" going inside if")
+        while(FALSE){}
         # construct column selector
         selX = matrix(1,1,ncol(dX))
         selX[1,i:j] = matrix(0,1,as.scalar(dist[1,in_c]))
@@ -136,6 +150,8 @@ m_mice= function(Matrix[Double] X, Matrix[Double] cMask, Integer iter = 3, Boole
       }
       else if (sum(Mask1[, in_c]) > 0 & as.scalar(cMask[, in_c]) != 0) # impute categorical features
       {
+        print(" going inside if")
+        while(FALSE){}
         # construct column selector
         selX = matrix(1,1,ncol(dX))
         selX[1,i:j] = matrix(0,1,as.scalar(dist[1,in_c]))
@@ -145,22 +161,26 @@ m_mice= function(Matrix[Double] X, Matrix[Double] cMask, Integer iter = 3, Boole
         slice1a = removeEmpty(target = X1, margin = "rows", select = inverseMask[,in_c])
         train_X = removeEmpty(target = slice1, margin = "cols", select = selX);
         train_Y = slice1a[,in_c]
-
         # prepare score data set X and Y for imputing Y
         slice2 = removeEmpty(target = dX, margin = "rows", select = Mask1[,in_c])
         slice2a = removeEmpty(target = X1, margin = "rows", select = Mask1[,in_c])
         test_X =  removeEmpty(target = slice2, margin = "cols", select = selX);
         test_Y = slice2a[,in_c]
-        
+        print("going for prediction")
+        while(FALSE){}
         # train classification model
-        beta = multiLogReg(X=train_X, Y=train_Y, icpt = 1, tol = 0.00000001, reg = 0.001, maxi = 100, maxii=0, verbose=FALSE)
+        beta = multiLogReg(X=train_X, Y=train_Y, icpt = 1, tol = 0.00001, reg = 0.00001, maxi = 50, maxii=50, verbose=FALSE)
         # predicting missing values 
         [prob,pred,acc] = multiLogRegPredict(X=test_X, B=beta, Y = test_Y)
+        print("prediction results out with acc "+acc)
+        while(FALSE){}
         # imputing missing column values (assumes Mask_Filled being 0/1-matrix)
         R = removeEmpty(target=Mask_Filled[,in_c] * seq(1,n), margin="rows");
         #TODO modify removeEmpty to return zero row and n columns
         if(!(nrow(R) == 1 & as.scalar(R[1,1] == 0)))
           Mask_Filled[,in_c] = table(R, 1, pred, n, 1); 
+       print("done")
+       while(FALSE){}
       }
       i = as.integer(j)+1
       in_c = in_c + 1
@@ -179,5 +199,18 @@ colMode = function (Matrix[Double] X) return (Matrix[Double] colMode) {
     X_c = removeEmpty(target=X, margin = "rows", select=(rowSums(X != 0)==d))
     cat_counts = table(X_c[, i], 1, n, 1);  # counts for each category
     colMode[1,i] = as.scalar(rowIndexMax(t(cat_counts))) # mode
+  }
+}
+
+colDist= function(Matrix[Double] X, Matrix[Double] mask)
+return (Matrix[Double] dist){
+  dist = matrix(1, 1, ncol(X))
+  parfor(i in 1:ncol(X))
+  {
+    if(as.scalar(mask[,i]) == 1)
+    {
+      distT = table(X[, i], 1)
+      dist[1, i] = sum(distT != 0)
+    }
   }
 }

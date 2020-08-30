@@ -34,6 +34,7 @@ import org.apache.sysds.runtime.matrix.data.FrameBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysds.runtime.matrix.data.Pair;
 import org.apache.sysds.runtime.meta.TensorCharacteristics;
+import org.w3c.dom.NamedNodeMap;
 
 public class UtilFunctions {
 	// private static final Log LOG = LogFactory.getLog(UtilFunctions.class.getName());
@@ -480,7 +481,7 @@ public class UtilFunctions {
 	}
 
 	public static double objectToDouble(ValueType vt, Object in) {
-		if( in == null )  return 0;
+		if( in == null )  return Double.NaN;
 		switch( vt ) {
 			case FP64:    return (Double)in;
 			case FP32:    return (Float)in;

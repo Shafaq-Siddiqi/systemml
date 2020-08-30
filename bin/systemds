@@ -45,7 +45,7 @@ if [ -n "$SYSTEMDS_STANDALONE_OPTS" ]; then
 else
   # specify paramteters  to java when running locally here
   SYSTEMDS_STANDALONE_OPTS="\
-      -Xmx4g\
+      -Xmx10g\
       -Xms4g\
       -Xmn400m"
 fi

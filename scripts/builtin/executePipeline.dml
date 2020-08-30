@@ -19,25 +19,48 @@
 #
 #-------------------------------------------------------------
 
-s_executePipeline = function(Frame[String] pipeline, Matrix[Double] X, 
+s_executePipeline = function(Frame[String] pipeline, Matrix[Double] X,  Matrix[Double] Y, Matrix[Double] mask,
   List[Unknown] hyperParameters, Boolean verbose)
-  return (Matrix[Double] X)
+  return (Matrix[Double] X, Matrix[Double] Y)
 {
-  for(i in 1: ncol(pipeline)) {
-    hp = matrixToList(X, as.matrix(hyperParameters[i]))
-    X = eval(as.scalar(pipeline[1,i]), hp)
+  if(verbose) {
+    print("checks   rows in X = "+nrow(X)+" rows in Y = "+nrow(Y)+" cols in X = "+ncol(X)+" col in Y = "+ncol(Y))
+    print("pipeline in execution "+toString(pipeline))
+    print("pipeline hps "+toString(hyperParameters))
+    print("mask "+toString(mask))
+    print("col max"+toString(colMaxs(X)))
+    while(FALSE){}
+  }
+  for(i in 1:ncol(pipeline)) {
+    op = as.scalar(pipeline[1,i])   
+    [hp, withClass] = matrixToList(X, Y, mask, as.matrix(hyperParameters[i]), op)
+    X = eval(op, hp)
+    if(withClass)
+    {
+      Y = X[, ncol(X)]
+      X = X[, 1:ncol(X) - 1]
+    }
+    while(FALSE){}
   }
 }
 
 # This function will convert the matrix row-vector into list
-matrixToList = function(Matrix[Double] X, Matrix[Double] p)
-  return (List[Unknown] l)
+matrixToList = function(Matrix[Double] X,  Matrix[Double] Y, Matrix[Double] mask, Matrix[Double] p, String op)
+  return (List[Unknown] l, Boolean withClass)
 {
+  withClass = FALSE
   l = list()
   l = append(l, X)
   if(sum(p) != -1) {
-    for(i in 1:ncol(p))
+    if(op  == "mice")
+      l = append(l, mask)
+    if(as.scalar(p[, ncol(p)]) == 1) {
+      l = append(l, Y)
+      withClass = TRUE
+    }
+    for(i in 1:ncol(p)-1)
       l = append(l, as.scalar(p[1,i]))
-  }
-  l = append(l, FALSE) #verbose parameter value
+    l = append(l, FALSE) #verbose parameter value
+  } 
+   # print(toString(l))
 }
