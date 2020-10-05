@@ -88,6 +88,7 @@ return (Frame[Unknown] result, Matrix[Double] res)
   # Generate logical Pipeline
   logical = as.frame("MVI")
   logical = cbind(logical, as.frame("OTLR"))
+  logical = as.frame("MVI")
   logical = cbind(logical, as.frame("DIM"))
   logical = cbind(logical, as.frame("CI"))
 

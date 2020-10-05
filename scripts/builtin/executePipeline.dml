@@ -54,6 +54,11 @@ matrixToList = function(Matrix[Double] X,  Matrix[Double] Y, Matrix[Double] mask
   if(sum(p) != -1) {
     if(op  == "mice")
       l = append(l, mask)
+    if(op == "pca") {
+      ratio = as.scalar(p[1,1]) * ncol(X)
+      p[1, 1] = as.integer(ncol(X) - ratio)
+      p[1, 2] = ifelse(as.scalar(p[1,2]) > 0.5, 1, 0)
+    }
     if(as.scalar(p[, ncol(p)]) == 1) {
       l = append(l, Y)
       withClass = TRUE
