@@ -23,13 +23,16 @@ X = read($1, data_type="frame", format="csv", header=TRUE, naStrings= ["NA", "nu
 meta = read($2, data_type="frame", format="csv", header=FALSE);
 primitives = read($3, data_type = "frame", format="csv", header= TRUE)
 param = read($4, data_type = "frame", format="csv", header= FALSE)
-[result, res] = startCleaning(X, "classification",  meta, primitives, param, 5, TRUE) 
+[result, res] = startCleaning(X, "classification",  meta, primitives, param, 5, 0.6, TRUE) 
 output = as.logical(as.scalar(res[1,1] < res[1,2]))
 write(output, $5, format = "text")
 
-
+str = "meta info \n"
+str = append(str, "pipeline length  5")
+str = append(str,"sample size of data 0.6")
+write(str, $5+"/descr.txt")
 startCleaning = function(Frame[Unknown] F, String targetApplication = "classification", Frame[Unknown] metaInfo, Frame[Unknown] primitives, 
-                Frame[Unknown] param, Integer k, Boolean verbose = FALSE)
+                Frame[Unknown] param, Integer k, Double sample, Boolean verbose = FALSE)
 return (Frame[Unknown] result, Matrix[Double] res)
 {
   res = as.matrix(0)
@@ -69,7 +72,7 @@ return (Frame[Unknown] result, Matrix[Double] res)
     
   getMask = getMask[, 1:ncol(getMask) - 1] # strip the mask of class label
 
-  [eX, eY] = doSample(eX, eY, 0.6)
+  [eX, eY] = doSample(eX, eY, sample)
 
   
   s = round(nrow(eX) * 0.7)  
@@ -116,11 +119,6 @@ return (Frame[Unknown] result, Matrix[Double] res)
   # op3 = cbind(op2, as.frame("pca"))
   # pip = cbind(op3, as.frame("abstain"))
   res = testBestPipeline(pip, hp, X_train, y_train, X_test, y_test, getMask)
-  
-
-  
-  
-  
   _hp = cbind(matrix(NaN, nrow(hp), 1), hp)
   # _acc = cbind(matrix(NaN, nrow(hp), 1), acc)
   result = cbind(pip, as.frame(_hp))
