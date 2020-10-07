@@ -19,7 +19,7 @@
 #
 #-------------------------------------------------------------
 
-X = read($1, data_type="frame", format="csv", header=TRUE, naStrings= ["NA", "null"," ","NaN", "nan", "", "?"]);
+X = read($1, data_type="frame", format="csv", header=TRUE, naStrings= ["NA", "null","  ","NaN", "nan", "", "?"]);
 meta = read($2, data_type="frame", format="csv", header=FALSE);
 primitives = read($3, data_type = "frame", format="csv", header= TRUE)
 param = read($4, data_type = "frame", format="csv", header= FALSE)
@@ -59,6 +59,9 @@ return (Frame[Unknown] result, Matrix[Double] res)
     index = vectorToCsv(idx)
     jspecR = "{ids:true, recode:["+index+"]}"
     [eX, X_meta] = transformencode(target=X, spec=jspecR);
+    # change the schema
+    getSchema = map(getSchema, "x->x.replace(\"STRING\", \"INT64\")")
+    getSchema = map(getSchema, "x->x.replace(\"BOOLEAN\", \"INT64\")")
     
   } else {
     eX = as.matrix(X)
@@ -71,6 +74,8 @@ return (Frame[Unknown] result, Matrix[Double] res)
     eY = eY + 1 # add one to class labels so that the min label is greater then zero
     
   getMask = getMask[, 1:ncol(getMask) - 1] # strip the mask of class label
+  getSchema = getSchema[, 1:ncol(getSchema) - 1] # strip the mask of class label
+  print("schema "+toString(getSchema))
 
   [eX, eY] = doSample(eX, eY, sample)
 
@@ -97,7 +102,7 @@ return (Frame[Unknown] result, Matrix[Double] res)
   hp = as.matrix(0)
   acc = as.matrix(0)
 
-  [pip, hp, acc] = bandit(X_train, y_train, X_test, y_test, getMask, logical, primitives, param, k, TRUE);
+  [pip, hp, acc] = bandit(X_train, y_train, X_test, y_test, getMask, getSchema, logical, primitives, param, k, TRUE);
   # print("output pip "+toString(pip))
   
   # reshuffle the dataset again for testing via permutation matrix
@@ -119,14 +124,14 @@ return (Frame[Unknown] result, Matrix[Double] res)
   # op2 = cbind(op1, as.frame("outlierBySd"))
   # op3 = cbind(op2, as.frame("pca"))
   # pip = cbind(op3, as.frame("abstain"))
-  res = testBestPipeline(pip, hp, X_train, y_train, X_test, y_test, getMask)
+  res = testBestPipeline(pip, hp, X_train, y_train, X_test, y_test, getMask, getSchema)
   _hp = cbind(matrix(NaN, nrow(hp), 1), hp)
   # _acc = cbind(matrix(NaN, nrow(hp), 1), acc)
   result = cbind(pip, as.frame(_hp))
   result = cbind(result, as.frame(acc))
 }
 
-testBestPipeline = function(Frame[Unknown] pip, Matrix[Double] hp, Matrix[Double] X_train, Matrix[Double] y_train, Matrix[Double] X_test, Matrix[Double] y_test, Matrix[Double] cmask)
+testBestPipeline = function(Frame[Unknown] pip, Matrix[Double] hp, Matrix[Double] X_train, Matrix[Double] y_train, Matrix[Double] X_test, Matrix[Double] y_test, Matrix[Double] cmask, Frame[Unknown] schema)
 return (Matrix[Double] result){
   ls = list();
   i = 1
@@ -155,10 +160,10 @@ return (Matrix[Double] result){
 
   X_train = clone_X
   # clean using best pipeline
-  [X_train_clean, Y_train_clean] = executePipeline(pip[1,], X_train, y_train, cmask, ls, TRUE)
+  [X_train_clean, Y_train_clean] = executePipeline(pip[1,], X_train, y_train, cmask, schema, ls, TRUE)
   print("here")
   while(FALSE){}
-  [X_test_clean, Y_test_clean] = executePipeline(pip[1,], X_test, y_test, cmask, ls, FALSE)
+  [X_test_clean, Y_test_clean] = executePipeline(pip[1,], X_test, y_test, cmask, schema,  ls, FALSE)
 
   # classify after cleaning
   betas = multiLogReg(X=X_train_clean, Y=Y_train_clean, icpt=2, tol=1e-9, reg=0.00001, maxi=100, maxii=0, verbose=FALSE)

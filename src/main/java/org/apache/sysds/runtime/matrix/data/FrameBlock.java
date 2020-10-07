@@ -1983,7 +1983,7 @@ public class FrameBlock implements CacheBlock, Externalizable  {
 	public FrameBlock dropInvalidType(FrameBlock schema) {
 		//sanity checks
 		if(this.getNumColumns() != schema.getNumColumns())
-			throw new DMLException("mismatch in number of columns in frame and its schema ");
+			throw new DMLException("mismatch in number of columns in frame and its schema "+this.getNumColumns()+" != "+schema.getNumColumns());
 
 		String[] schemaString = schema.getStringRowIterator().next(); // extract the schema in String array
 		for (int i = 0; i < this.getNumColumns(); i++) {

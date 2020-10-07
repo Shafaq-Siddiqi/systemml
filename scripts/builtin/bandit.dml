@@ -19,7 +19,7 @@
 #
 #-------------------------------------------------------------
 
-m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Double] X_val, Matrix[Double] Y_val, Matrix[Double] mask,
+m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Double] X_val, Matrix[Double] Y_val, Matrix[Double] mask, Frame[Unknown] schema,
   Frame[Unknown] lp, Frame[Unknown] primitives, Frame[Unknown]  param, Integer k = 3,  Boolean verbose = TRUE)
   return (Frame[Unknown] bestPipeline, Matrix[Double] bestHyperparams,  Matrix[Double] accuracy ) 
 {
@@ -55,7 +55,7 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
       while(FALSE){}
     }
 
-    [a,b] = run_with_hyperparam(configurations[1:n_i,], r_i, X_train, Y_train, X_val, Y_val, mask, param, verbose)
+    [a,b] = run_with_hyperparam(configurations[1:n_i,], r_i, X_train, Y_train, X_val, Y_val, mask, schema, param, verbose)
     a = frameSort(a)
     b = order(target = b, by = 1, decreasing=TRUE, index.return=FALSE)
     
@@ -150,7 +150,7 @@ get_physical_configurations = function(Frame[String] logical, Scalar[int] n, Fra
 }
 
 run_with_hyperparam = function(Frame[String] ph_pip, Integer r_i, Matrix[Double] X, Matrix[Double] Y, 
-                      Matrix[Double] X_val, Matrix[Double] Y_val, Matrix[Double] mask, Frame[Unknown]  param, Boolean verbose)
+                      Matrix[Double] X_val, Matrix[Double] Y_val, Matrix[Double] mask, Frame[Unknown] schema, Frame[Unknown]  param, Boolean verbose)
                       
 return (Frame[Unknown] output_operator, Matrix[Double] output_hyperparam)
 {
@@ -170,10 +170,9 @@ return (Frame[Unknown] output_operator, Matrix[Double] output_hyperparam)
     {
       hp = getHyperparam(ph_pip[i,], param)
       best_hp = hp
-      [X, Y] = executePipeline(ph_pip[i], X, Y, mask, hp, TRUE)
-      print("done training ")
+      [X, Y] = executePipeline(ph_pip[i], X, Y, mask, schema, hp, TRUE)
       while(FALSE){}
-      [X_val, Y_val] = executePipeline(ph_pip[i], X_val, Y_val, mask, hp, FALSE)
+      [X_val, Y_val] = executePipeline(ph_pip[i], X_val, Y_val, mask, schema, hp, FALSE)
       accuracy = fclassify(X, Y, X_val, Y_val)
       if(accuracy > best_acc) {
         best_acc = accuracy
@@ -274,3 +273,4 @@ return (Double accuracy)
     [prob, yhat, accuracy] = multiLogRegPredict(X_val, betas, y_val, FALSE)
   }
 }
+

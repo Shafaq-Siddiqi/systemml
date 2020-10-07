@@ -20,7 +20,7 @@
 #-------------------------------------------------------------
 
 s_executePipeline = function(Frame[String] pipeline, Matrix[Double] X,  Matrix[Double] Y, Matrix[Double] mask,
-  List[Unknown] hyperParameters, Boolean verbose)
+  Frame[Unknown] schema, List[Unknown] hyperParameters, Boolean verbose)
   return (Matrix[Double] X, Matrix[Double] Y)
 {
   if(verbose) {
@@ -41,6 +41,7 @@ s_executePipeline = function(Frame[String] pipeline, Matrix[Double] X,  Matrix[D
       X = X[, 1:ncol(X) - 1]
     }
     while(FALSE){}
+    X = confirmMeta(X, schema, op)
   }
 }
 
@@ -68,4 +69,11 @@ matrixToList = function(Matrix[Double] X,  Matrix[Double] Y, Matrix[Double] mask
     l = append(l, FALSE) #verbose parameter value
   } 
    # print(toString(l))
+}
+
+confirmMeta = function(Matrix[Double] X, Frame[Unknown] schema, string op)
+return (Matrix[Double] X)
+{
+  if(op == "imputByMean" | op == "winsorize" | op == "imputeByMedian")
+    X = as.matrix(dropInvalidType(as.frame(X), schema))
 }
