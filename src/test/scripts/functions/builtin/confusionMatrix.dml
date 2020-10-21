@@ -22,6 +22,11 @@
 Y = read($Y)
 P = read($P)
 
+X = matrix("1 1 1 1 2 1 2 2 1 2", rows = 10, cols = 1)
+T = matrix("1 1 1 1 2 1 2 1 1 2", rows = 10, cols = 1)
+
+[confusionCount1, confusionAVG] = confusionMatrix(Y=X, P=T)
 [confusionCount, confusionAVG] = confusionMatrix(Y=Y, P=P)
 
+print(toString(confusionCount1))
 write(confusionAVG, $out_file)

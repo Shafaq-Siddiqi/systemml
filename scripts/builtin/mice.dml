@@ -179,7 +179,7 @@ colMode = function (Matrix[Double] X) return (Matrix[Double] colMode) {
   n = nrow(X)
   colMode = matrix(0, 1, ncol(X))
   # compute column wise mode
-  parfor(i in 1: d) {
+  for(i in 1: d) {
     X_c = removeEmpty(target=X, margin = "rows", select=(rowSums(X != 0)==d))
     cat_counts = table(X_c[, i], 1, n, 1);  # counts for each category
     colMode[1,i] = as.scalar(rowIndexMax(t(cat_counts))) # mode
@@ -189,7 +189,7 @@ colMode = function (Matrix[Double] X) return (Matrix[Double] colMode) {
 colDist= function(Matrix[Double] X, Matrix[Double] mask)
 return (Matrix[Double] dist){
   dist = matrix(1, 1, ncol(X))
-  parfor(i in 1:ncol(X))
+  for(i in 1:ncol(X))
   {
     if(as.scalar(mask[,i]) == 1)
     {

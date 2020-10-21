@@ -1,4 +1,5 @@
 #-------------------------------------------------------------
+#-------------------------------------------------------------
 #
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
@@ -19,15 +20,17 @@
 #
 #-------------------------------------------------------------
 
-m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Double] X_val, Matrix[Double] Y_val, Matrix[Double] mask, Frame[Unknown] schema,
-  Frame[Unknown] lp, Frame[Unknown] primitives, Frame[Unknown]  param, Integer k = 3,  Boolean verbose = TRUE)
+m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Double] X_val, Matrix[Double] Y_val, Matrix[Double] mask, 
+           Frame[Unknown] schema, Frame[Unknown] lp, Frame[Unknown] primitives, Frame[Unknown]  param, Integer k = 3,
+           Double testAccuracy = 0.8, Boolean verbose = TRUE)
+           
   return (Frame[Unknown] bestPipeline, Matrix[Double] bestHyperparams,  Matrix[Double] accuracy ) 
 {
   bestHyperparams = as.matrix(0)
   bestPipeline = as.frame("")
   # variable names follow publication where algorithm is introduced
   eta = 2  # the halving ratio is fixed
-  R = (eta^k) + 1  # R is also fixed 
+  R =  (eta^k) + 1 # R is also fixed (eta^k) + 1
   s_max = floor(log(R,eta));
   B = (s_max + 1) * R;
   if(s_max < k)
@@ -40,7 +43,15 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
   print("n "+n)
   r = R * eta^(-s_max);
   configurations = get_physical_configurations(lp, n, primitives)
-      
+  if(verbose)
+  {
+    print("R "+ R)
+    print("s_max "+ s_max)
+    print("B "+ B)
+    print("n "+ n)
+    print("r "+ r)
+    
+  }
   for( i in 0:s_max ) {
       
     # successive halving    
@@ -65,11 +76,20 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
     # generate one output in each iteration
     top_pipeline = a[1]
     top_hp = b[1]
+    if(as.scalar(top_hp[1, 1])  <  testAccuracy)
+    {
+      print("accuracy retaining "+ as.scalar(top_hp[1, 1]))
+      top_pipeline[,2:ncol(top_pipeline)] = map(top_pipeline[,2:ncol(top_pipeline)], "x->\"{}\"")
+      top_pipeline[, 1] = 0
+      print("here to replace ")
+      print(toString(top_pipeline))
+      top_hp = top_hp * 0
+    }
     
     if(ncol(k_tmp_operations) == 1)
     {
-      k_tmp_operations = a[1]
-      k_tmp_hyp = b[1]
+      k_tmp_operations = top_pipeline
+      k_tmp_hyp = top_hp 
     }
     else {
       if(ncol(k_tmp_hyp) < ncol(b))
@@ -82,7 +102,6 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
     }
   }
  
-  
   bestPipeline = frameSort(k_tmp_operations)
   bestHyperparams = order(target = k_tmp_hyp, by = 1, decreasing=TRUE, index.return=FALSE)
   
@@ -96,6 +115,7 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
     print("best pipeline"+ toString(bestPipeline))
     print("best hyper-parameters \n"+ toString(bestHyperparams))
     print("best accuracy \n"+ toString(accuracy))
+    print("dirty accuracy "+testAccuracy)
   }
 }
 
@@ -129,19 +149,15 @@ get_physical_configurations = function(Frame[String] logical, Scalar[int] n, Fra
 
   if(n >= nrow(intermediates))
   {
-    print("this is true")
-
     physical = intermediates
     remaining = n - nrow(intermediates) 
-
   }
-  else {
+  else 
     remaining = n
-  }
-     
+ 
   for(i in 1:remaining)
   {
-    random = round(as.scalar(rand(rows=1, cols=1, min=1, max= nrow(intermediates), pdf="uniform")))
+    random = round(as.scalar(rand(rows=1, cols=1, min=1, max= nrow(intermediates), pdf="uniform", seed = 42)))
     if(as.scalar(physical[1,1]) == "NaN")
       physical = intermediates[random,]
     else 
@@ -170,9 +186,10 @@ return (Frame[Unknown] output_operator, Matrix[Double] output_hyperparam)
     {
       hp = getHyperparam(ph_pip[i,], param)
       best_hp = hp
-      [X, Y] = executePipeline(ph_pip[i], X, Y, mask, schema, hp, TRUE)
+      [X, Y] = executePipeline(ph_pip[i], X, Y, mask, schema, hp, FALSE)
       while(FALSE){}
       [X_val, Y_val] = executePipeline(ph_pip[i], X_val, Y_val, mask, schema, hp, FALSE)
+      while(FALSE){}
       accuracy = fclassify(X, Y, X_val, Y_val)
       if(accuracy > best_acc) {
         best_acc = accuracy
@@ -231,7 +248,7 @@ return (List[Unknown] paramList)
       for(j in 1:d) {
         minVal = as.scalar(hpList[index, p]);
         maxVal = as.scalar(hpList[index, p + 1]);
-        val = as.scalar(rand(rows=1, cols=1, min=minVal, max=maxVal, pdf="uniform"));
+        val = as.scalar(rand(rows=1, cols=1, min=minVal, max=maxVal, pdf="uniform", seed = 42));
         parameters[1, j] = val;
         p = p + 2; 
       }
@@ -269,8 +286,53 @@ return (Double accuracy)
   }
   else 
   { 
-    betas = multiLogReg(X=X, Y=Y, icpt=2, tol=1e-9, reg=0.00001, maxi=100, maxii=0, verbose=FALSE)
+    betas = multiLogReg(X=X, Y=Y, icpt=2, tol=1e-9, reg=0.00001, maxi=50, maxii=50, verbose=FALSE)
     [prob, yhat, accuracy] = multiLogRegPredict(X_val, betas, y_val, FALSE)
   }
 }
+# fclassify = function(Matrix[Double] X, Matrix[Double] Y,  Matrix[Double] X_val, Matrix[Double] y_val)
+# return (Double accuracy)
+# {
 
+  # if(max(Y) == min(Y)) {
+    # print("Y contains only one class")
+    # tab = table(Y, 1)
+    # print("dist in Y "+toString(tab))
+    # accuracy = 0
+  # }
+  # else 
+  # { 
+    # accuracyMatrix = crossV(rbind(X, X_val), rbind(Y, y_val), 10)
+    # accuracy = mean(accuracyMatrix)
+    # print("validation accuracy "+accuracy)
+    
+  # }
+# }
+
+crossV = function(Matrix[double] X, Matrix[double] y, Integer k) 
+return (Matrix[Double] accuracyMatrix)
+{
+  #create empty lists
+  dataset_X = list(); #empty list
+  dataset_y = list();
+  fs = ceil(nrow(X)/k);
+  off = fs - 1;
+  #divide X, y into lists of k matrices
+  for (i in seq(1, k)) {
+    dataset_X = append(dataset_X, X[i*fs-off : min(i*fs, nrow(X)),]);
+    dataset_y = append(dataset_y, y[i*fs-off : min(i*fs, nrow(y)),]);
+  }
+
+  accuracyMatrix = matrix(0, k, 1)
+  #keep one fold for testing in each iteration
+  for (i in seq(1, k)) {
+    [tmpX, testX] = remove(dataset_X, i);
+    [tmpy, testy] = remove(dataset_y, i);
+    trainX = rbind(tmpX);
+    trainy = rbind(tmpy);
+    trainX = trainX[,1:ncol(X)] # TODO improve list size propagation
+    beta = multiLogReg(X=trainX, Y=trainy, icpt=2, reg=0.00001, tol=1e-9, maxi=50, maxii= 50, verbose=FALSE);
+    [prob, yhat, accuracy] = multiLogRegPredict(as.matrix(testX), beta, as.matrix(testy), FALSE)
+    accuracyMatrix[i] = accuracy
+  }
+}

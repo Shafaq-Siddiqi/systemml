@@ -39,6 +39,7 @@ public class BuiltinConfusionMatrixTest extends AutomatedTestBase {
 
 	@Override
 	public void setUp() {
+		setOutputBuffering(false);
 		TestUtils.clearAssertionInformation();
 		addTestConfiguration(TEST_NAME, new TestConfiguration(TEST_CLASS_DIR, TEST_NAME, new String[] {"B",}));
 	}

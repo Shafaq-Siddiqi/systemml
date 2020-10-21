@@ -36,7 +36,7 @@ public class CleaningTest extends AutomatedTestBase {
 
 	protected static final String DATA_DIR = "./scripts/staging/pipelines/";
 	private final static String DATASET = DATA_DIR+ "adult.csv";
-	private final static String META = DATA_DIR+ "meta.csv";
+	private final static String META = DATA_DIR+ "meta_adult.csv";
 	private final static String PARAM = DATA_DIR+ "param.csv";
 	private final static String PRIMITIVES = DATA_DIR+ "primitives.csv";
 
