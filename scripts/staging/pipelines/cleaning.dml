@@ -37,6 +37,8 @@ startCleaning = function(Frame[Unknown] F, String targetApplication = "classific
                 Frame[Unknown] param, Integer k, Double sample, Boolean verbose = FALSE)
 return (Frame[Unknown] result, Matrix[Double] res)
 {
+  # accuracy flag
+  isWeighted = TRUE
   res = as.matrix(0)
   result = as.frame(0)
   if(nrow(metaInfo) < 3)
@@ -45,8 +47,6 @@ return (Frame[Unknown] result, Matrix[Double] res)
   # initialize variables
   eX = as.matrix(0)
   eY = as.matrix(0)
-  
-  
   
   getSchema = metaInfo[1, 2:ncol(metaInfo)]
   getMask = as.matrix(metaInfo[2, 2:ncol(metaInfo)])
@@ -85,14 +85,14 @@ return (Frame[Unknown] result, Matrix[Double] res)
   expected_balance_score = nrow(eY) / classes_k # n/k
   balance_score = getBalanceScore(eY)
   print("balance score "+toString(balance_score))
-  print("log  "+(log(classes_k, 10)))
-  print("classes "+classes_k)
-  print(sum(balance_score))
-  if(sum(balance_score) < (log(classes_k, 10) - 0.2))
-  {
-    [eX, eY] = doOversampling(eX, eY, FALSE)
-    print("nrow after smote "+nrow(eX))
-  }
+  # print("log  "+(log(classes_k, 10)))
+  # print("classes "+classes_k)
+  # print(sum(balance_score))
+  # if(sum(balance_score) < (log(classes_k, 10) - 0.2))
+  # {
+    # [eX, eY] = doOversampling(eX, eY, FALSE)
+    # print("nrow after smote "+nrow(eX))
+  # }
   
   
   # check balance of the dataset
@@ -133,13 +133,14 @@ return (Frame[Unknown] result, Matrix[Double] res)
   
   betas = multiLogReg(X=train_tmp, Y=y_train, icpt=2, tol=1e-9, reg=0.00001, maxi=100, maxii=0, verbose=FALSE)
   [d_prob, d_yhat, d_accuracy] = multiLogRegPredict(test_tmp, betas, y_test, FALSE)
+  d_accuracy = accuracy_metric(y_test, d_yhat, isWeighted)
   print("dirty accuracy "+d_accuracy)
   pip = as.frame("")
   hp = as.matrix(0)
   acc = as.matrix(0)
 
   # fineTuneClassifier(X_train, y_train, X_test, y_test, X_val, y_val)
-  [pip, hp, acc] = bandit(X_train, y_train, X_val, y_val, getMask, getSchema, logical, primitives, param, k, d_accuracy, TRUE);
+  [pip, hp, acc] = bandit(X_train, y_train, X_val, y_val, getMask, getSchema, logical, primitives, param, k, d_accuracy, isWeighted, TRUE);
   print("output pip "+toString(pip))
   
   # hp = matrix("-1 4.000 2.291 1.323 32.944 -1.000 3.000 0.161 0.323 -1.000 2.000 0.665 1.000", rows = 1, cols = 13)
@@ -153,16 +154,16 @@ return (Frame[Unknown] result, Matrix[Double] res)
   # _acc = cbind(matrix(NaN, nrow(hp), 1), acc)
   result = cbind(pip, as.frame(_hp))
   result = cbind(result, as.frame(acc))
-  if(as.scalar(pip[1,1]) == "{}") {
+  if(as.scalar((is.na(acc[1,1]))) == 1) {
     stop("warning: no best pipeline found")
   }
-  res = testBestPipeline(pip, hp, X_train, y_train, X_test, y_test, getMask, getSchema)
+  res = testBestPipeline(pip, hp, X_train, y_train, X_test, y_test, getMask, getSchema, as.scalar(acc[1,1]))
 
 }
 
 testBestPipeline = function(Frame[Unknown] pip, Matrix[Double] hp, Matrix[Double] X_train, Matrix[Double] y_train, 
-                            Matrix[Double] X_test, Matrix[Double] y_test, Matrix[Double] cmask, Frame[Unknown] schema)
-return (Matrix[Double] result){
+                            Matrix[Double] X_test, Matrix[Double] y_test, Matrix[Double] cmask, Frame[Unknown] schema, Double valAcc)
+return (Matrix[Double] result) {
   ls = list();
   i = 1
   # construct the parameter list for best hyper-parameters
@@ -188,8 +189,8 @@ return (Matrix[Double] result){
   betas = multiLogReg(X=X_train, Y=y_train, icpt=2, tol=1e-9, reg=0.00001, maxi=50, maxii=50, verbose=FALSE)
   [d_prob, d_yhat, d_accuracy] = multiLogRegPredict(X_test, betas, y_test, FALSE)
   [confusionCount_d, confusionAVG_d] = confusionMatrix(Y=d_yhat, P=y_test)
-  print("rows in test "+nrow(y_test))
-  print("accuracy of test dirty  "+d_accuracy)
+  
+
   print("dirty confusion matrix  \n"+toString(confusionCount_d))
 
   X_train = clone_X_train
@@ -201,11 +202,14 @@ return (Matrix[Double] result){
   # classify after cleaning
   betas = multiLogReg(X=X_train_clean, Y=Y_train_clean, icpt=2, tol=1e-9, reg=0.00001, maxi=50, maxii=50, verbose=FALSE)
   [c_prob, c_yhat, c_accuracy] = multiLogRegPredict(X_test_clean, betas, Y_test_clean, FALSE)
-  print("rows in test clean "+nrow(Y_test_clean))
+  
   [confusionCount_c, confusionAVG_c] = confusionMatrix(Y=c_yhat, P=Y_test_clean)
-  print("accuracy of test clean "+c_accuracy)
-  print("clean confusion matrix  \n"+toString(confusionCount_c))
+  print("accuracy of dirty accuracy "+d_accuracy)
+  print("accuracy of val accuracy  "+valAcc)
+  print("accuracy of test accuracy "+c_accuracy)
+  # print("clean confusion matrix  \n"+toString(confusionCount_c))
 
+  
   result = cbind(as.matrix(d_accuracy), as.matrix(c_accuracy))
 }
 
@@ -362,51 +366,6 @@ return (Matrix[Double] isBalanced)
   isBalanced = H / log(k)
 }
 
-
-
-doOversampling  = function(Matrix[Double] X, Matrix[Double] Y, Boolean verbose)
-return (Matrix[Double] X, Matrix[Double] Y)
-{
-  while(FALSE){}
-  XY = order(target = cbind(Y, X),  by = 1, decreasing=FALSE, index.return=FALSE)
-  # get the class count 
-  classes = table(Y, 1)
-  
-  start_class = 1
-  end_class = 0
-  k = table(Y, 1)
-  getMax = max(k)
-  maxKIndex = as.scalar(rowIndexMax(t(k)))
-  print("max index: "+maxKIndex)
-  while(FALSE){}
-  outSet = matrix(0, 0, ncol(XY))
-  
-  for(i in 1: nrow(k))
-  {
-   
-    if(!(i == maxKIndex))
-    {
-      end_class = end_class + as.scalar(classes[i])
-      class_t = XY[start_class:end_class, ]
-      remainingRatio = getMax - nrow(class_t)
-      synthesized = smote(class_t, remainingRatio, 1, FALSE)
-      outSet = rbind(outSet, synthesized)
-      start_class = end_class + 1
-      if(verbose)
-      {
-        print("max value: "+getMax)
-        print("values of i: "+i)
-        print("remaining ratio: "+remainingRatio)
-        print("synthesized \n"+toString(synthesized))
-      
-      }
-    }
-  }
-  
-  XY = rbind(XY, synthesized)
-  Y = XY[, 1]
-  X = XY[, 2:ncol(XY)]
-}
 
 fineTuneClassifier = function(Matrix[Double] train_X, Matrix[Double] train_y, Matrix[Double] test_X, Matrix[Double] test_y, Matrix[Double] val_X, Matrix[Double] val_y)
 {

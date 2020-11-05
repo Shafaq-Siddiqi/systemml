@@ -55,6 +55,7 @@ public class BuiltinGridSearchTest extends AutomatedTestBase
 	
 	private void runGridSearch(ExecType et)
 	{
+		setOutputBuffering(false);
 		ExecMode modeOld = setExecMode(et);
 		try {
 			loadTestConfiguration(getTestConfiguration(TEST_NAME));

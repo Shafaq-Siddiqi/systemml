@@ -23,27 +23,37 @@ m_gridSearch = function(Matrix[Double] X, Matrix[Double] y, String train, String
   List[String] params, List[Unknown] paramValues, Boolean verbose = TRUE) 
   return (Matrix[Double] B, Frame[Unknown] opt) 
 {
+  print("train "+train)
+  print("paramValue "+toString(paramValues))
   # Step 0) preparation of parameters, lengths, and values in convenient form
   numParams = length(params);
   paramLens = matrix(0, numParams, 1);
   for( j in 1:numParams ) {
     vect = as.matrix(paramValues[j,1]);
     paramLens[j,1] = nrow(vect);
+    print("j "+j)
+    print("vect "+toString(vect))
   }
   paramVals = matrix(0, numParams, max(paramLens));
   for( j in 1:numParams ) {
     vect = as.matrix(paramValues[j,1]);
     paramVals[j,1:nrow(vect)] = t(vect);
   }
+   print("paramVals "+toString(paramVals))
+  print("rev(paramlens ) "+toString(paramLens))
   cumLens = rev(cumprod(rev(paramLens))/rev(paramLens));
+  print("cumLen "+toString(cumLens))
   numConfigs = prod(paramLens);
+   print("config "+toString(numConfigs))
   
   # Step 1) materialize hyper-parameter combinations 
   # (simplify debugging and compared to compute negligible)
   HP = matrix(0, numConfigs, numParams);
   parfor( i in 1:nrow(HP) ) {
-    for( j in 1:numParams )
+    for( j in 1:numParams ) {
+      print("col "+as.scalar(((i-1)/cumLens[j,1])%%paramLens[j,1]+1))
       HP[i,j] = paramVals[j,as.scalar(((i-1)/cumLens[j,1])%%paramLens[j,1]+1)];
+    }
   }
 
   if( verbose )

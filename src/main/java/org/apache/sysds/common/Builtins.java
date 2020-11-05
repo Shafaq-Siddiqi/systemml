@@ -39,6 +39,7 @@ import org.apache.sysds.common.Types.ReturnType;
 public enum Builtins {
 	//builtin functions
 	ABS("abs", false),
+	ACCURACY("accuracy_metric", true),
 	ABSTAIN("abstain", true),
 	ACOS("acos", false),
 	ASIN("asin", false),

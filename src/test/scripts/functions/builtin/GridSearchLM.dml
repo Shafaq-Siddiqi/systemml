@@ -17,7 +17,22 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-#-------------------------------------------------------------
+#------------------------------------------------------------- 
+l = as.frame(matrix("5 5 4 2 1", 5, 1))
+frame = as.frame("1")
+frame = cbind(frame, as.frame("mvi"))
+frame = cbind(frame, as.frame("ci"))
+frame = cbind(frame, as.frame("otlr"))
+li = list(as.frame("inlist"))
+
+print(toString(li))
+f1 = as.frame(li[1])
+print(toString(f1))
+
+# f = as.frame(li[3])
+# f3 = rbind(f1, f)
+# print("yeh bh ti chal ra "+toString(f3))
+
 
 l2norm = function(Matrix[Double] X, Matrix[Double] y, Matrix[Double] B) return (Matrix[Double] loss) {
   loss = as.matrix(sum((y - X%*%B)^2));

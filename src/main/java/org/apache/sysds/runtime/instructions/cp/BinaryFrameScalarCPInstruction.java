@@ -35,6 +35,7 @@ public class BinaryFrameScalarCPInstruction extends BinaryCPInstruction
 		// get input frames
 		FrameBlock inBlock = ec.getFrameInput(input1.getName());
 		String stringExpression = ec.getScalarInput(input2).getStringValue();
+
 		//compute results
 		FrameBlock outBlock = inBlock.map(stringExpression);
 		// Attach result frame with FrameBlock associated with output_name

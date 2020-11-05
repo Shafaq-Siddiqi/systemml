@@ -820,8 +820,9 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 					if( !list.checkAllDataTypes(DataType.SCALAR) )
 						throw new DMLRuntimeException("as.matrix over multi-entry list only allows scalars.");
 					MatrixBlock out = new MatrixBlock(list.getLength(), 1, false);
-					for( int i=0; i<list.getLength(); i++ )
-						out.quickSetValue(i, 0, ((ScalarObject)list.slice(i)).getDoubleValue());
+					for( int i=0; i<list.getLength(); i++ ) {
+						out.quickSetValue(i, 0, ((ScalarObject) list.slice(i)).getDoubleValue());
+					}
 					ec.setMatrixOutput(output.getName(), out);
 				}
 				else {
@@ -831,6 +832,7 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 						MatrixBlock out = new MatrixBlock(((ScalarObject)tmp).getDoubleValue());
 						ec.setMatrixOutput(output.getName(), out);
 					}
+
 					else {
 						ec.setVariable(output.getName(), tmp);
 					}
@@ -854,13 +856,21 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 			out = new FrameBlock(1, getInput1().getValueType());
 			out.ensureAllocatedColumns(1);
 			out.set(0, 0, scalarInput.getStringValue());
+			ec.setFrameOutput(output.getName(), out);
 		}
-		else { //DataType.FRAME
+		else if(getInput1().getDataType()==DataType.MATRIX) { //DataType.FRAME
 			MatrixBlock min = ec.getMatrixInput(getInput1().getName());
 			out = DataConverter.convertToFrameBlock(min);
 			ec.releaseMatrixInput(getInput1().getName());
+			ec.setFrameOutput(output.getName(), out);
 		}
-		ec.setFrameOutput(output.getName(), out);
+		else { //convert list
+			ListObject list = (ListObject)ec.getVariable(getInput1().getName());
+			Data tmp = list.slice(0);
+			ec.setVariable(output.getName(), tmp);
+		}
+
+
 	}
 
 	/**

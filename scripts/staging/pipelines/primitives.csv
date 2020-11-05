@@ -1,4 +1,4 @@
 outlier,mvi,ci,dR
 outlierByIQR,imputeByMean,abstain,pca
-outlierBySd,imputeByMedian,,
+outlierBySd,imputeByMedian,SMOTE,
 winsorize,mice,,
