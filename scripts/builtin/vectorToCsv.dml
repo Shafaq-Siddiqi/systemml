@@ -23,12 +23,13 @@
 
 # function to convert vector into csv
 
-m_vectorToCsv = function(Matrix[Double] vector)
+m_vectorToCsv = function(Matrix[Double] mask)
 return (String indexes){
 
+  vector  = mask * t(seq(1, ncol(mask)))
+  vector = removeEmpty(target = vector, margin = "cols")
   if(nrow(vector) >  ncol(vector))
     vector = t(vector)
-  vector = removeEmpty(target= vector, margin = "cols")
   s = ""
   if(ncol(vector) > 1) {
     for(i in 1:ncol(vector)-1)

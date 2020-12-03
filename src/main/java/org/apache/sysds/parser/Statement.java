@@ -54,6 +54,7 @@ public abstract class Statement implements ParseInfo
 	public static final String GAGG_FN      = "fn";
 	public static final String GAGG_FN_SUM      = "sum";
 	public static final String GAGG_FN_COUNT    = "count";
+	public static final String GAGG_FN_MAX    = "max";
 	public static final String GAGG_FN_MEAN     = "mean";
 	public static final String GAGG_FN_VARIANCE = "variance";
 	public static final String GAGG_FN_CM       = "centralmoment";

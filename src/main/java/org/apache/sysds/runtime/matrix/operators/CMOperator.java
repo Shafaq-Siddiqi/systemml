@@ -33,6 +33,7 @@ public class CMOperator extends Operator
 		SUM,
 		COUNT,
 		MEAN, //a.k.a. CM
+		MAX,
 		CM2,
 		CM3,
 		CM4,
@@ -79,6 +80,8 @@ public class CMOperator extends Operator
 			return AggregateOperationTypes.SUM;
 		} else if (fn.equalsIgnoreCase("mean")) {
 			return AggregateOperationTypes.MEAN;
+		} else if (fn.equalsIgnoreCase("max")) {
+			return AggregateOperationTypes.MAX;
 		} else if (fn.equalsIgnoreCase("variance")) {
 			return AggregateOperationTypes.VARIANCE;
 		} else if (fn.equalsIgnoreCase("centralmoment")) {

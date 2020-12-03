@@ -20,42 +20,52 @@
 #-------------------------------------------------------------
 
 X = read($1, data_type="frame", format="csv", header=TRUE, 
-  naStrings= ["NA", "null","  ","NaN", "nan", "", "?"]);
+  naStrings= ["NA", "null","  ","NaN", "nan", "", "?", "99999"]);
 meta = read($2, data_type="frame", format="csv", header=FALSE);
 primitives = read($3, data_type = "frame", format="csv", header= TRUE)
-param = read($4, data_type = "frame", format="csv", header= FALSE)
-sample = 0.4
+param = read($4, data_type = "frame", format="csv", header= TRUE)
+sample = 0.2
 k = 5
-R = 40
-
+R = 20
+cv=10
 # accuracy flag
-weightedAccuracy = TRUE
+weightedAccuracy = FALSE
 
 # TODO do it automatically
 # Generate logical Pipeline
-logical = as.frame("OTLR")
-logical = cbind(logical, as.frame("MVI"))
-# logical = cbind(logical, as.frame("CI"))
-# logical = cbind(logical, as.frame("NR"))
+logical = frame(["MVI", "OTLR", "MVI", "SCALE", "DUMMY", "DIM"], rows=1, cols=6)
 
-[result, res] = startCleaning(X, logical, "classification",  meta, primitives, param, k, 
-  sample, weightedAccuracy, R, TRUE) 
+# logical[1,1] = "MVI"
+# logical[1,2] = "OTLR"
+# logical[1,3] = "MVI"
+# logical[1,4] = "SCALE"
+# logical[1,5] = "DUMMY"
+# logical[1,6] = "DIM"
+print("logical "+toString(logical))
+
+
+[result, res] = startCleaning(F=X, logical=logical, target="classification",  metaInfo=meta, 
+  primitives=primitives, param=param, k=k, sample=sample, isWeighted=weightedAccuracy, 
+  R=R, cv=cv, verbose=TRUE)
+  
 output = as.logical(as.scalar(res[1,1] < res[1,2]))
 write(output, $5, format = "text")
+write(output, $5, format = "text")
 
-str = "meta info \n"
-str = append(str, "pipeline length  "+k)
-str = append(str,"sample size of data "+sample)
 
-startCleaning = function(Frame[Unknown] F, Frame[Unknown] logical, String targetApplication = "classification", 
+startCleaning = function(Frame[Unknown] F, Frame[Unknown] logical, String target = "classification", 
   Frame[Unknown] metaInfo, Frame[Unknown] primitives, Frame[Unknown] param, Integer k, Double sample,
-  Boolean isWeighted = TRUE, Integer R=50, Boolean verbose = FALSE)
+  Boolean isWeighted = TRUE, Integer R=50, Integer cv=3, Boolean verbose = FALSE)
   return (Frame[Unknown] result, Matrix[Double] res)
 {
-
+  
   res = as.matrix(0)
   result = as.frame(0)
-  if(nrow(metaInfo) < 3)
+  pip = as.frame("")
+  hp = as.matrix(0)
+  acc = as.matrix(0)
+  
+  if(nrow(metaInfo) < 2)
     stop("incomplete meta info")
     
   # initialize variables
@@ -70,83 +80,75 @@ startCleaning = function(Frame[Unknown] F, Frame[Unknown] logical, String target
 
   if(sum(getMask) > 0 )
   {
-    idx  = getMask * t(seq(1, ncol(X)))
-    idx = removeEmpty(target = idx, margin = "cols")
-    index = vectorToCsv(idx)
+    # always recode the label
+    index = vectorToCsv(getMask)
     jspecR = "{ids:true, recode:["+index+"]}"
     [eX, X_meta] = transformencode(target=X, spec=jspecR);
     # change the schema
     getSchema = map(getSchema, "x->x.replace(\"STRING\", \"INT64\")")
     getSchema = map(getSchema, "x->x.replace(\"BOOLEAN\", \"INT64\")")
     
-  } else {
+  } else
     eX = as.matrix(X)
-  }
 
-  eY = eX[, ncol(X)]
+  eY = eX[, ncol(eX)]
   eX = eX[, 1:ncol(X) - 1]
-    
-  if(min(eY) == 0)
-    eY = eY + 1 # add one to class labels so that the min label is greater then zero
     
   getMask = getMask[, 1:ncol(getMask) - 1] # strip the mask of class label
   getSchema = getSchema[, 1:ncol(getSchema) - 1] # strip the mask of class label
 
-  [eX, eY] = doSample(eX, eY, sample)
   # get train test and validation set with balanced class distribution
-  [X_trainset, y_trainset, X_test, y_test] = getDataSplits(eX, eY, 0.6, FALSE)
-  [X_train, y_train, X_val, y_val] = getDataSplits(X_trainset, y_trainset, 0.7, FALSE)
+  [X_train, y_train, X_test, y_test] = splitBalanced(eX, eY, 0.8, FALSE)
+  d_accuracy = classifyDirty(X_train, y_train, X_test, y_test, getMask, isWeighted)
 
-  if(verbose) {
-    print("classes in each split ")
-    trc = table(y_train, 1)
-    print("class distribution in train \n"+toString(trc))  
-    tsc = table(y_test, 1)
-    print("class distribution in test \n"+toString(tsc))
-    tvc = table(y_val, 1)
-    print("class distribution in validation \n"+toString(tvc))
-  }
-      
-  # get test accuracy first
-  # classify without cleaning
-  train_tmp = replace(target = X_train, pattern = NaN, replacement=0)
-  test_tmp = replace(target = X_test, pattern = NaN, replacement=0)
-  
-  betas = multiLogReg(X=train_tmp, Y=y_train, icpt=2, tol=1e-9, reg=0.00001, maxi=50, 
-    maxii=50, verbose=FALSE)
-  [d_prob, d_yhat, d_accuracy] = multiLogRegPredict(test_tmp, betas, y_test, FALSE)
-  d_accuracy = getAccuracy(y_test, d_yhat, isWeighted)
-  if(verbose)
-    print("dirty accuracy "+d_accuracy)
-  
-  pip = as.frame("")
-  hp = as.matrix(0)
-  acc = as.matrix(0)
+  [eX, eY] = doSample(eX, eY, sample)
+  # [eX, eY] = prioritise(eX, eY, getMask)
+  [X_train, y_train, X_test, y_test] = splitBalanced(eX, eY, 0.8, FALSE)
+  params = list("reg", "maxi");
+  paramRanges = list(10^seq(0,-10), seq(10,100, 10));
 
-  [pip, hp, acc] = bandit(X_train, y_train, X_val, y_val, getMask, getSchema, logical, primitives,
-    param, k, d_accuracy, isWeighted, R, TRUE);
+  [opt, loss] = gridSearchMLR(X_train, y_train, X_test, y_test, 
+	 "multiLogReg", "lossFunc", params, paramRanges, FALSE);
+   
+
+  [pip, hp, acc] = bandit(X_train=X_train, Y_train=y_train,  mask=getMask, MLhp=opt,
+    schema=getSchema, lp=logical, primitives=primitives, param=param, k=k, testAccuracy=d_accuracy,
+    isWeighted=isWeighted, R=R, cv=cv, verbose=TRUE);
+  # acc = as.matrix(1)
+  # pip = frame(["imputeByMean", "winsorize", "imputeByMean", "scale", "dummycoding", "pca"], rows=1, cols=6)
+  # print("pipeline "+toString(pip))
+  # hp = matrix("4.000 1.000 0.000 0.000 2.000 " 
+              # +"4.000 0.000 0.000 1.000 0.000 " 
+              # +"4.000 1.000 0.000 0.000 2.000 " 
+              # +"6.000 1.000 0.000 0.000 0.000 0.000 0.000 " 
+             # + "4.000 1.000 0.000 0.000 2.000 " 
+              # +"7.000 2.000 1.000 0.000 0.000 0.000 0.000 2.000 0.000 0.000 0.000 0.000 0.000", 
 
   tmp_hp = cbind(matrix(NaN, nrow(hp), 1), hp)
   result = cbind(pip, as.frame(tmp_hp))
   result = cbind(result, as.frame(acc))
-  if(as.scalar((is.na(acc[1,1]))) == 1) {
+  
+  if(as.scalar((is.na(acc[1,1]))) == 1 | as.scalar(acc[1,1]) < d_accuracy)
     stop("warning: no best pipeline found")
-  }
-  res = testBestPipeline(pip[1,], hp[1,], X_train, y_train, X_test, y_test, getMask, 
-    getSchema, as.scalar(acc[1,1]))
-
+  
+  clean_accuracy = testBestPipeline(pip=pip[1,], hp=hp[1,], X_train=X_train, y_train=y_train,
+    X_test=X_test, y_test=y_test, cmask=getMask, MLhp=opt, schema=getSchema, valAcc=as.scalar(acc[1,1]), dirAcc=d_accuracy,
+    isWeighted=isWeighted)
+    
+  res = cbind(as.matrix(d_accuracy), as.matrix(clean_accuracy))
 }
 
 testBestPipeline = function(Frame[Unknown] pip, Matrix[Double] hp, Matrix[Double] X_train, Matrix[Double] y_train, 
-  Matrix[Double] X_test, Matrix[Double] y_test, Matrix[Double] cmask, Frame[Unknown] schema, Double valAcc)
-  return (Matrix[Double] result) {
+  Matrix[Double] X_test, Matrix[Double] y_test, Matrix[Double] cmask, Matrix[Double] MLhp, Frame[Unknown] schema,
+  Double valAcc, Double dirAcc, Boolean isWeighted)
+  return (Double result) {
+  print("hp "+toString(hp))
   ls = list();
-  i = 1
-  k = 1
+  i = 1; k = 1
+  trRow=nrow(X_train)
   # construct the parameter list for best hyper-parameters
   while(k <= ncol(pip))
   {
-
     end = as.integer(i+as.integer(as.scalar(hp[1,i])))
     mat = hp[1, i+1:end]
     i = end + 1
@@ -154,41 +156,30 @@ testBestPipeline = function(Frame[Unknown] pip, Matrix[Double] hp, Matrix[Double
     k = k + 1
   }
   
-  clone_X_train = X_train
-  clone_X_test = X_test
-  X_train = replace(target = X_train, pattern = NaN, replacement = 0)
-  X_test = replace(target = X_test, pattern = NaN, replacement = 0)
+  # clean using best pipeline and train model
+  [X_train, Y_train] = executePipeline(pip, rbind(X_train,X_test),
+    rbind(y_train,y_test), cmask, schema, ls, FALSE)
+  X_train_clean = X_train[1:trRow, ]
+  y_train_clean = Y_train[1:trRow, ]
+  X_test_clean = X_train[trRow+1:nrow(X_train), ]
+  y_test_clean = Y_train[trRow+1:nrow(X_train), ]
 
-  # classify without cleaning
-  betas = multiLogReg(X=X_train, Y=y_train, icpt=2, tol=1e-9, reg=0.00001, maxi=50,
-    maxii=50, verbose=FALSE)
-  [d_prob, d_yhat, d_accuracy] = multiLogRegPredict(X_test, betas, y_test, FALSE)
-  [confusionCount_d, confusionAVG_d] = confusionMatrix(P=d_yhat, Y=y_test)
+  # classify after cleaning  
+  betas = multiLogReg(X=X_train_clean, Y=y_train_clean, icpt=1,
+    reg=as.scalar(MLhp[1,1]), tol= 1e-9, maxi=as.scalar(MLhp[1,2]), 
+    maxii= 50, verbose=FALSE);
+    
+  [c_prob, c_yhat, c_accuracy] = multiLogRegPredict(X_test_clean, betas, y_test_clean, FALSE)
+    c_accuracy = getAccuracy(y_test_clean, c_yhat, isWeighted)
+  [confusionCount_c, confusionAVG_c] = confusionMatrix(P=c_yhat, Y=y_test_clean)
   
-
-  print("dirty confusion matrix  \n"+toString(confusionCount_d))
-
-  X_train = clone_X_train
-  X_test = clone_X_test
-  # clean using best pipeline
-  [X_train_clean, Y_train_clean] = executePipeline(pip, X_train, y_train, cmask, schema, ls, FALSE)
-  [X_test_clean, Y_test_clean] = executePipeline(pip, X_test, y_test, cmask, schema,  ls, FALSE)
-  while(FALSE){}
-  # classify after cleaning
-  betas = multiLogReg(X=X_train_clean, Y=Y_train_clean, icpt=2, tol=1e-9, reg=0.00001, maxi=50, 
-    maxii=50, verbose=FALSE)
-  [c_prob, c_yhat, c_accuracy] = multiLogRegPredict(X_test_clean, betas, Y_test_clean, FALSE)
-  
-  [confusionCount_c, confusionAVG_c] = confusionMatrix(P=c_yhat, Y=Y_test_clean)
-  
-  print("accuracy of dirty accuracy "+d_accuracy)
-  print("accuracy of val accuracy  "+valAcc)
+  print("accuracy of dirty data  "+dirAcc)
+  print("accuracy of val data  "+valAcc)
   print("accuracy of test accuracy "+c_accuracy)
   print("clean confusion matrix  \n"+toString(confusionCount_c))
   
-  result = cbind(as.matrix(d_accuracy), as.matrix(c_accuracy))
+  result = c_accuracy
 }
-
 
 # stratified sampling 
 doSample = function(Matrix[Double] eX, Matrix[Double] eY, Double ratio)
@@ -229,12 +220,15 @@ doSample = function(Matrix[Double] eX, Matrix[Double] eY, Double ratio)
 }
 
 # incomplete implementation of automatic logical pipelines
-generateLogical = function(Matrix[Double] X, Matrix[Double] Y)
+generateLogical = function(Matrix[Double] X, Matrix[Double] Y, Matrix[Double] mask)
 {
+  
+  # detection = 
   logical = as.frame("")
-  # get the stats
   no_of_mv = sum(is.na(X))
   X = replace(target= X, pattern = NaN, replacement = 0)
+  
+  # get the stats
   colMin = colMins(X)
   colMax = colMaxs(X)
   colMean = colMeans(X)
@@ -255,6 +249,7 @@ generateLogical = function(Matrix[Double] X, Matrix[Double] Y)
     logical = cbind(logical, as.frame("OTLR"))
   if((maxCat - minCatPer) > 0.3)
     logical = cbind(logical, as.frame("CI"))
+  # if(min(X))
 }
 
 # stratified splitting 
@@ -322,3 +317,192 @@ return (Matrix[Double] isBalanced)
   # Balance = H / log(k) return 0 for unbalance data and 1 for balanced data
   isBalanced = H / log(k)
 }
+
+classifyDirty = function(Matrix[Double] Xtrain, Matrix[Double] ytrain, Matrix[Double] Xtest,
+  Matrix[Double] ytest, Matrix[Double] mask, Boolean isWeighted = TRUE)
+return (Double accuracy)
+{
+  # classify without cleaning fill with edfault values 1
+  Xtrain = replace(target = Xtrain, pattern = NaN, replacement=1)
+  Xtest = replace(target = Xtest, pattern = NaN, replacement=1)
+  
+  train_max_values = colMaxs(Xtrain)
+  test_max_values = colMaxs(Xtest)
+
+  dX_train = matrix(0,nrow(Xtrain),0)
+  dX_test = matrix(0,nrow(Xtest),0)
+
+
+  for(i in 1:ncol(mask))
+  {
+    if(as.scalar(mask[1, i]) == 1)
+    {
+      max_value = as.scalar(max(train_max_values[1, i], test_max_values[1, i]))
+      encoded = toOneHot(Xtrain[, i], max_value)
+      dX_train = cbind(dX_train, encoded)
+      encoded = toOneHot(Xtest[, i], max_value)
+      dX_test = cbind(dX_test, encoded)
+    }
+    else {
+      dX_train = cbind(dX_train, Xtrain[, i])
+      dX_test = cbind(dX_test, Xtest[, i])
+    }
+
+  }
+  # learn model
+  B = multiLogReg(X=dX_train, Y=ytrain, icpt=2, reg=0.00001, maxi = 50, maxii= 50, verbose=FALSE);
+  [M,pred,accuracy] = multiLogRegPredict(X=dX_test, B=B, Y=ytest, verbose=FALSE);
+
+  if(isWeighted) 
+    accuracy = getAccuracy(y=ytest, yhat=pred, isWeighted=isWeighted)
+  print("dirty accuracy "+accuracy)
+}
+
+prioritise = function(Matrix[Double] X, Matrix[Double] y, Matrix[Double] mask)
+return(Matrix[Double] sortedX, Matrix[Double] sortedY)
+{
+# classify without cleaning fill with the default values 1
+  Xtrain = replace(target = X, pattern = NaN, replacement=1)
+  
+  train_max_values = colMaxs(Xtrain)
+  dX_train = matrix(0,nrow(Xtrain),0)
+  # one-hot-encode the categorical features
+  for(i in 1:ncol(mask))
+  {
+    if(as.scalar(mask[1, i]) == 1)
+    {
+      max_value = as.scalar(train_max_values[1, i])
+      while(FALSE){}
+      encoded = toOneHot(Xtrain[, i], max_value)
+      dX_train = cbind(dX_train, encoded)
+    }
+    else {
+      dX_train = cbind(dX_train, Xtrain[, i])
+    }
+
+  }
+  # print('ncol in dx train '+ncol(dX_train))
+  while(FALSE){}
+  # learn model
+  B = multiLogReg(X=dX_train, Y=y, icpt=1, reg=0, tol=1e-6, maxi = 100, maxii= 0, verbose=FALSE);
+  [prob,yhat,accuracy] = multiLogRegPredict(X=dX_train, B=B, Y=y, verbose=FALSE);
+  # print("the accuracy "+accuracy)
+  
+  detect = (rowMaxs(prob) < 0.9)
+  position = seq(1, nrow(X))
+  err = removeEmpty(target=position, margin="rows", select=detect)
+  # print("erroneous records position "+toString(err))
+
+  position = seq(1, nrow(X))
+  fn = removeEmpty(target=position, margin="rows", select=(detect==0))
+  # print("fine records position "+toString(fn))
+  
+  erroneousX = removeEmpty(target=X, margin="rows", select=detect)
+  erroneousY = removeEmpty(target=y, margin="rows", select=detect)
+  # print("errorneous X \n"+toString(cbind(erroneousX, erroneousY), rows=200))
+
+  fineX = removeEmpty(target=X, margin="rows", select=(detect == 0))
+  fineY = removeEmpty(target=y, margin="rows", select=(detect == 0))
+  # print("error waley "+toString(erroneous))
+  # print("fine X \n"+toString(cbind(fineX, fineY), rows=500))
+  sortedX = rbind(erroneousX, fineX)
+  sortedY = rbind(erroneousY, fineY)
+  sortedX = removeEmpty(target=sortedX, margin="rows", select=sortedY)
+  sortedY = removeEmpty(target=sortedY, margin="rows", select=sortedY)
+ 
+  # print("YES "+(nrow(X) == nrow(sortedX)))
+  
+}
+
+dummycoding = function(Matrix[Double] X, Matrix[Double] mask)
+return (Matrix[Double] dX_train) {
+
+  Xtrain = replace(target = X, pattern = NaN, replacement=1)
+  
+  train_max_values = colMaxs(Xtrain)
+  dX_train = matrix(0,nrow(Xtrain),0)
+  # one-hot-encode the categorical features
+  for(i in 1:ncol(mask))
+  {
+    if(as.scalar(mask[1, i]) == 1)
+    {
+      max_value = max(train_max_values[1, i])
+      encoded = toOneHot(Xtrain[, i], max_value)
+      dX_train = cbind(dX_train, encoded)
+    }
+    else {
+      dX_train = cbind(dX_train, Xtrain[, i])
+    }
+
+  }
+}
+
+
+gridSearchMLR = function(Matrix[Double] Xtrain, Matrix[Double] ytrain, Matrix[Double] Xtest,
+    Matrix[Double] ytest, String train, String predict,	List[String] params, List[Unknown] paramValues,
+    Boolean verbose = TRUE) 
+
+  return (Matrix[Double] opt, Matrix[Double] Rloss) 
+{
+  # Step 0) preparation of parameters, lengths, and values in convenient form
+  numParams = length(params);
+  paramLens = matrix(0, numParams, 1);
+  for( j in 1:numParams ) {
+    vect = as.matrix(paramValues[j,1]);
+    paramLens[j,1] = nrow(vect);
+  }
+  paramVals = matrix(0, numParams, max(paramLens));
+  for( j in 1:numParams ) {
+    vect = as.matrix(paramValues[j,1]);
+    paramVals[j,1:nrow(vect)] = t(vect);
+  }
+  cumLens = rev(cumprod(rev(paramLens))/rev(paramLens));
+  numConfigs = prod(paramLens);
+  
+  # Step 1) materialize hyper-parameter combinations 
+  # (simplify debugging and compared to compute negligible)
+  HP = matrix(0, numConfigs, numParams);
+  parfor( i in 1:nrow(HP) ) {
+    for( j in 1:numParams )
+      HP[i,j] = paramVals[j,as.scalar(((i-1)/cumLens[j,1])%%paramLens[j,1]+1)];
+  }
+
+  if( verbose )
+    print("GridSeach: Hyper-parameter combinations: \n"+toString(HP));
+
+  # Step 2) training/scoring of parameter combinations
+  # TODO integrate cross validation
+ 
+  Rloss = matrix(0, nrow(HP), 3);
+  arguments1 = list(X=Xtrain, Y=ytrain, icpt=1, reg=-1, tol=1e-9, maxi=-1, maxii=0, verbose=FALSE);
+
+  parfor( i in 1:nrow(HP)) {
+    # a) replace training arguments
+    largs1 = arguments1;
+
+    for( j in 1:numParams ) {
+      largs1[as.scalar(params[j])] = as.scalar(HP[i,j]);
+    }
+    # b) core training/scoring and write-back
+    # TODO investigate rmvar handling with explicit binding (lbeta)
+    Rbeta1 = eval(train, largs1);
+    Rloss[i,1] = eval(predict, list(Xtest, ytest, Rbeta1));
+  }
+
+  # Step 3) select best parameter combination
+  ix = as.scalar(rowIndexMin(t(Rloss[,2])));
+  opt = HP[ix,]; # optimal hyper-parameters
+ 
+}
+
+
+lossFunc = function(Matrix[Double] X, Matrix[Double] y, Matrix[Double] B) 
+return (Matrix[Double] loss) {
+  [prob, yhat, acc] = multiLogRegPredict(X=X, B=B, Y=y,  verbose=FALSE)
+  loss = as.matrix(1 - (acc/100))
+  [confusionCount_c, confusionAVG_c] = confusionMatrix(P=yhat, Y=y)
+  # print(" loss: "+toString(loss))
+  # print("confusion matrix")
+  # print(toString(confusionCount_c))
+}
+

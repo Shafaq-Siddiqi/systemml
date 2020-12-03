@@ -1,0 +1,10 @@
+Description of param file
+parameters for the primitives
+primitive name
+primitive parameters no.
+primitives contain mask 0/1 flag
+primitives contain Y (Y flag) 0/1 values
+primitives has verbose variable (verboseFlag) 0/1 values
+primitives is applicable on 0=numeric, 1=categorical, 2=all
+Data types of parameters
+Values ranges of parameters

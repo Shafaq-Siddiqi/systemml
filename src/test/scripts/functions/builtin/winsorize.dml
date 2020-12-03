@@ -22,3 +22,32 @@
 X = read($1);
 Y = winsorize(X, FALSE);
 write(Y, $2)
+
+
+X= matrix("1 1 2 2 2 3 3 3 3 4 4 4 4 4 5 5 5 5 5 5 6 6 6 6 6 6 6 6 6 6", rows = 30, cols=1)
+Y= matrix("0.6 0.67 0.2 0.24 .02 0.8 0.89 0.6 0.66 .4 .4 .4 .4 .41 .85 .855 .95 .5 .85 .65 .6 .6 .6 .68 .6 .6 .6 .6 .6 .6", rows = 30, cols=1)
+print(toString(cbind(X, Y)))
+while(FALSE){}
+classFeatureCounts = aggregate(target=Y, groups=X, fn="count")
+
+value = matrix(0, rows=nrow(classFeatureCounts), cols=2)
+
+print("see count per group ")
+print(toString(classFeatureCounts))
+while(FALSE){}
+start = 0
+end = 0
+for(i in 1:nrow(value))
+{
+  start = end + 1
+  end = end + as.scalar(classFeatureCounts[i,1])
+  sub = max(Y[start:end,])
+  value[i, 1] = i
+  value[i, 2] = sub
+}
+
+
+
+
+print("see max per group ")
+print(toString(value))

@@ -21,37 +21,26 @@
 
 # Related to [SYSTEMDS-2662] dependency function for cleaning pipelines
 
-m_imputeByMedian = function(Matrix[Double] X, Matrix[Double] mask)
+m_imputeByMode = function(Matrix[Double] X)
 return(Matrix[Double] X)
 {
-  # print("median in \n"+toString(X))
-  nX = removeEmpty(target=X, margin="cols", select=(mask==0))
-  cX = removeEmpty(target=X, margin="cols", select=mask)
-  Mask_n = is.na(nX);  
-  nX = replace(target=nX, pattern=NaN, replacement=0);
-  cols = ncol(nX)
-  #  median imputation
-  colMedian = matrix(0, 1, cols)
-  parfor(i in 1:cols)
-    colMedian[1, i] = median(X[,i])
-  X_n = nX + (Mask_n * colMedian)
-  # mode imputation
-  X_c = imputeByMode(cX)
-
-  p = table(seq(1, ncol(nX)), removeEmpty(target=seq(1, ncol(mask)), margin="rows", 
-    select=t(mask==0)), ncol(nX), ncol(X))
-  q = table(seq(1, ncol(cX)), removeEmpty(target=seq(1, ncol(mask)), margin="rows", 
-    select=t(mask)), ncol(cX), ncol(X))
-  X = (X_n %*% p) + (X_c %*% q)
-
-  # cols = ncol(X)
-  # colMedian = matrix(0, 1, cols)
-
-
-  # for(i in 1:cols)
-    # colMedian[, i] = median(X[,i])
-  # Mask = Mask * colMedian
-  # X = X + Mask
-    # print("median out \n"+toString(X))
+  # print("inside mode")
+  # while(FALSE){}
+  Mask = is.na(X)
+  X = replace(target=X, pattern=NaN, replacement=0)
+  colMode = matrix(0, 1, ncol(X))
+  for(i in 1: ncol(X)) {
+    X_c = removeEmpty(target=X[, i], margin = "rows", select=(X[, i] < 1)==0)
+    if(sum(X_c) == 0)
+      colMode[1, i] = 1
+    else {
+      cat_counts = table(X_c, 1, nrow(X_c), 1);  # counts for each category
+      colMode[1,i] = as.scalar(rowIndexMax(t(cat_counts))) # mode
+    }
+  }
+  Mask = Mask * colMode
+  X = X + Mask
+  # print("mode imputed \n"+toString(X, rows=5))
 
 }
+

@@ -1,4 +1,5 @@
-outlier,mvi,nr,ci,dr
-winsorize,imputeByMean,abstain,SMOTE,pca
-outlierBySd,imputeByMedian,,,
-outlierByIQR,mice,,,
+OTLR,MVI,NR,CI,DIM,DUMMY,SCALE
+winsorize,imputeByMean,abstain,SMOTE,pca,dummycoding,scale
+outlierBySd,imputeByMedian,,,,,
+outlierByIQR,mice,,,,,
+,fillDefault,,,,,

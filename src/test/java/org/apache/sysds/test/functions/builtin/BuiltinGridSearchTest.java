@@ -74,6 +74,5 @@ public class BuiltinGridSearchTest extends AutomatedTestBase
 		}
 		finally {
 			resetExecMode(modeOld);
-		}
-	}
+		} }
 }

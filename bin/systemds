@@ -30,6 +30,7 @@
 
 #  If not set by env,  set to 1 to run spark-submit instead of local java
 #  This should be used if "-exec SPARK" or "-exec HYBRID" is required
+
 if [ -z "$SYSDS_DISTRIBUTED" ]; then
   SYSDS_DISTRIBUTED=0
 fi

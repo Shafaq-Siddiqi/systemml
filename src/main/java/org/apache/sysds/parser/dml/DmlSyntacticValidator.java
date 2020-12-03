@@ -604,7 +604,7 @@ public class DmlSyntacticValidator implements DmlListener {
 		if( Builtins.contains(functionName, true, false) ) {
 			//load and add builtin DML-bodied functions
 			String filePath = Builtins.getFilePath(functionName);
-			FunctionDictionary<FunctionStatementBlock> prog = 
+			FunctionDictionary<FunctionStatementBlock> prog =
 				parseAndAddImportedFunctions(namespace, filePath, ctx).getDefaultFunctionDictionary();
 			if( prog != null ) //robustness for existing functions
 				for( Entry<String,FunctionStatementBlock> f : prog.getFunctions().entrySet() )

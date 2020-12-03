@@ -1167,7 +1167,9 @@ public abstract class AutomatedTestBase {
 			// if R < 4.0 on Windows is used, the file separator needs to be Windows style
 			if(System.getProperty("os.name").contains("Windows")) {
 				Process r_ver_cmd = Runtime.getRuntime().exec("RScript --version");
+
 				String r_ver = IOUtils.toString(r_ver_cmd.getErrorStream());
+				System.out.println("-----------------------------"+r_ver);
 				if(!r_ver.contains("4.0")) {
 					cmd = cmd.replace('/', '\\');
 					executionFile = executionFile.replace('/', '\\');

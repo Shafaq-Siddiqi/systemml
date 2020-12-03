@@ -33,11 +33,12 @@ public class CleaningTest extends AutomatedTestBase {
 	private final static String TEST_CLASS_DIR = TEST_DIR + CleaningTest.class.getSimpleName() + "/";
 
 
-	protected static final String DATA_DIR = "./scripts/staging/pipelines/";
+	protected static final String DATA_DIR = "D:/PhD TU Graz/Pipelines/experiments/scripts/data/";
+	protected static final String PARAM_DIR = "./scripts/staging/pipelines/";
 	private final static String DATASET = DATA_DIR+ "heart.csv";
-	private final static String META = DATA_DIR+ "meta_heart.csv";
-	private final static String PARAM = DATA_DIR+ "param.csv";
-	private final static String PRIMITIVES = DATA_DIR+ "primitives.csv";
+	private final static String META = DATA_DIR+ "meta/meta_heart.csv";
+	private final static String PARAM = PARAM_DIR+ "param.csv";
+	private final static String PRIMITIVES = PARAM_DIR+ "primitives.csv";
 
 	@Override
 	public void setUp() {
@@ -51,13 +52,14 @@ public class CleaningTest extends AutomatedTestBase {
 
 
 	private void runCleaningTest(Types.ExecMode et) {
-		Types.ExecMode modeOld = setExecMode(et);
-		try {
-			loadTestConfiguration(getTestConfiguration(TEST_NAME));
 			String HOME = SCRIPT_DIR + TEST_DIR;
+			Types.ExecMode modeOld = setExecMode(et);
+			try {
+				loadTestConfiguration(getTestConfiguration(TEST_NAME));
 			fullDMLScriptName = HOME + TEST_NAME + ".dml";
 
-			programArgs = new String[] {"-stats", "-exec", "singlenode", "-args", DATASET, META, PRIMITIVES, PARAM, output("R")};
+			programArgs = new String[] {"-stats", "-exec", "singlenode", "-args", DATASET, META, PRIMITIVES,
+				PARAM, output("R")};
 
 			runTest(true, EXCEPTION_NOT_EXPECTED, null, -1);
 
