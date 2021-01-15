@@ -165,7 +165,8 @@ get_physical_configurations = function(Frame[String] logical, Scalar[int] numCon
     else if(as.scalar(logical[1,j]) == "DUMMY")
       operator = cbind(operator, dummy);  
     else if(as.scalar(logical[1,j]) == "SCALE")
-      operator = cbind(operator, scale);  
+      operator = cbind(operator, scale);
+    else stop("invalid operation "+as.scalar(logical[1,j]))
   }
   opt = operator[,2:ncol(operator)] 
 
