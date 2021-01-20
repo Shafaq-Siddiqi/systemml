@@ -169,6 +169,7 @@ public enum Builtins {
 	NORMALIZE("normalize", true),
 	NROW("nrow", false),
 	NAIVEBAYES("naivebayes", true, false),
+	NAIVEBAYES_PREDICT("naiveBayesPredict", true, false),
 	OUTER("outer", false),
 	OUTLIER("outlier", true, false), //TODO parameterize opposite
 	OUTLIER_SD("outlierBySd", true),

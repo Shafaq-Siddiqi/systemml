@@ -142,6 +142,7 @@ public class BuiltinMiceTest extends AutomatedTestBase {
 		if(countTrue / (double)dmlfileC.size() > 0.98)
 			Assert.assertTrue(true);
 		else
-			Assert.fail("categorical test fails, the true value count is less than 98%");
+			Assert.fail("categorical test fails, the true value count is less than 98% "+
+				(countTrue / (double)dmlfileC.size()));
 	}
 }

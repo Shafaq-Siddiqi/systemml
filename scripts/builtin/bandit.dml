@@ -257,7 +257,7 @@ getHyperparam = function(Frame[Unknown] pipeline, Frame[Unknown]  hpList)
   paramList = list()
   for(i in 1:ncol(pipeline)) {
     op = as.scalar(pipeline[1,i])
-    hasParam = map(hpList[,1], "x->x.contains(\""+op+"\")")
+    hasParam = map(hpList[,1], "x->x.split(\",\")[0].equals(\""+op+"\")")
     m_hasParam = matrix(0, nrow(hasParam), 1)
 
     # convert the boolean vector to 0/1 matrix representation
@@ -296,9 +296,12 @@ getHyperparam = function(Frame[Unknown] pipeline, Frame[Unknown]  hpList)
           OpParam[1, j] = val
         }
         else if(type == "BOOL") {
-          s = as.scalar(sample(2,1))
-          b = as.integer(s-1)
-          OpParam[1, j] = b
+          if(maxVal == 1) {
+            s = as.scalar(sample(2, 1))
+            b = as.integer(s-1)
+            OpParam[1, j] = b
+          }
+          else  OpParam[1, j] = 0
         }
         else {
           # TODO handle string set something like {,,}
@@ -492,7 +495,7 @@ extractBracketWinners = function(Matrix[Double] pipeline, Matrix[Double] hyperpa
   for(i in 1: nrow(pipeline), check=0)
   {
     index = as.scalar(pipeline[i, 3])
-    bestPipeline[i, ] = conf[index, 2:ncol(conf)]
+    bestPipeline[i, 1:ncol(bestPipeline)] = conf[index, 2:ncol(conf)]
   }
   bestPipeline = cbind(as.frame(pipeline[, 1]),  bestPipeline)
   
@@ -706,7 +709,8 @@ return (Matrix[Double] dX_train) {
     if(as.scalar(mask[1, i]) == 1)
     {
       max_value = max(train_max_values[1, i])
-      encoded = toOneHot(Xtrain[, i], max_value)
+      data = replace(target=Xtrain[, i], pattern=0, replacement=1)
+      encoded = toOneHot(data, max_value)
       dX_train = cbind(dX_train, encoded)
     }
     else {

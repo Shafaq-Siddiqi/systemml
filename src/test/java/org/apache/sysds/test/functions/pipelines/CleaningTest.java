@@ -36,7 +36,9 @@ public class CleaningTest extends AutomatedTestBase {
 	protected static final String DATA_DIR = "D:/PhD TU Graz/Pipelines/experiments/scripts/data/";
 	protected static final String PARAM_DIR = "./scripts/staging/pipelines/";
 	private final static String DATASET = DATA_DIR+ "heart.csv";
+//	private final static String DATASET = "D:\\PhD TU Graz\\Pipelines\\experiments\\Synthetic\\data\\mcar\\exp1\\0.1.csv";
 	private final static String META = DATA_DIR+ "meta/meta_heart.csv";
+//	private final static String META = "D:\\PhD TU Graz\\Pipelines\\experiments\\Synthetic\\data\\clean\\meta_census.csv";
 	private final static String PARAM = PARAM_DIR+ "param.csv";
 	private final static String PRIMITIVES = PARAM_DIR+ "primitives.csv";
 
@@ -48,6 +50,10 @@ public class CleaningTest extends AutomatedTestBase {
 	@Test
 	public void testCP() {
 		runCleaningTest(Types.ExecMode.SINGLE_NODE);
+	}
+	@Test
+	public void testSpark() {
+		runCleaningTest(Types.ExecMode.SPARK);
 	}
 
 
