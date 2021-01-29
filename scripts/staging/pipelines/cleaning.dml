@@ -24,17 +24,27 @@ X = read($1, data_type="frame", format="csv", header=FALSE,
 meta = read($2, data_type="frame", format="csv", header=FALSE);
 primitives = read($3, data_type = "frame", format="csv", header= TRUE)
 param = read($4, data_type = "frame", format="csv", header= TRUE)
+f = frame(data=["0.9", "1", "2", "3", "4",
+                "0.9", "1", "2", "3", "4",
+                "0.8", "1", "3", "3", "4",
+                "0.85", "1", "2", "3", "4",
+                "0.9", "17", "3", "33", "4",
+                "0.18", "0", "0", "0", "0",
+                "0.9", "1", "2", "3", "4",
+                "0.85", "1", "2", "3", "4"], rows=8, cols=5)
+
+
 sample = 1
 k = 5
-R = 20
-cv=10
+R = 10
+cv=2
 # accuracy flag
 weightedAccuracy = FALSE
 
 # TODO do it automatically
 # Generate logical Pipeline
 # logical = frame(["MVI", "OTLR", "MVI", "SCALE", "DUMMY", "DIM"], rows=1, cols=6)
-logical = frame("MVI", rows=1, cols=1)
+logical = frame(["MVI", "DUMMY"], rows=1, cols=2)
 
 # logical[1,1] = "MVI"
 # logical[1,2] = "OTLR"
@@ -99,19 +109,21 @@ startCleaning = function(Frame[Unknown] F, Frame[Unknown] logical, String target
   getMask = getMask[, 1:ncol(getMask) - 1] # strip the mask of class label
   getSchema = getSchema[, 1:ncol(getSchema) - 1] # strip the mask of class label
 
+  
+  [eX, eY] = doSample(eX, eY, sample)
   # get train test and validation set with balanced class distribution
   [X_train, y_train, X_test, y_test] = splitBalanced(eX, eY, 0.8, FALSE)
-  d_accuracy = classifyDirty(X_train, y_train, X_test, y_test, getMask, isWeighted)
 
-  [eX, eY] = doSample(eX, eY, sample)
-  # [eX, eY] = prioritise(eX, eY, getMask)
-  [X_train, y_train, X_test, y_test] = splitBalanced(eX, eY, 0.8, FALSE)
   params = list("reg", "maxi");
   paramRanges = list(10^seq(0,-10), seq(10,100, 10));
 
   [opt, loss] = gridSearchMLR(X_train, y_train, X_test, y_test, 
 	 "multiLogReg", "lossFunc", params, paramRanges, FALSE);
    
+  d_accuracy = classifyDirty(X_train, y_train, opt, getMask, isWeighted, cv)
+  # [eX, eY] = prioritise(eX, eY, getMask)
+
+
 
   [pip, hp, acc] = bandit(X_train=X_train, Y_train=y_train,  mask=getMask, MLhp=opt,
     schema=getSchema, lp=logical, primitives=primitives, param=param, k=k, testAccuracy=d_accuracy,
@@ -320,44 +332,25 @@ return (Matrix[Double] isBalanced)
   isBalanced = H / log(k)
 }
 
-classifyDirty = function(Matrix[Double] Xtrain, Matrix[Double] ytrain, Matrix[Double] Xtest,
-  Matrix[Double] ytest, Matrix[Double] mask, Boolean isWeighted = TRUE)
-return (Double accuracy)
+classifyDirty = function(Matrix[Double] Xtrain, Matrix[Double] ytrain, Matrix[Double] opt, 
+  Matrix[Double] mask, Boolean isWeighted = TRUE, Integer cv)
+  return (Double accuracy)
 {
   # classify without cleaning fill with edfault values 1
   Xtrain = replace(target = Xtrain, pattern = NaN, replacement=1)
-  Xtest = replace(target = Xtest, pattern = NaN, replacement=1)
   
-  train_max_values = colMaxs(Xtrain)
-  test_max_values = colMaxs(Xtest)
+  dX_train = dummycoding(Xtrain, mask)
 
-  dX_train = matrix(0,nrow(Xtrain),0)
-  dX_test = matrix(0,nrow(Xtest),0)
+  accuracy = crossV(Xtrain, ytrain, cv, mask, opt, isWeighted)
+  accuracy = mean(accuracy)
 
+  # # learn model
+  # B = multiLogReg(X=dX_train, Y=ytrain, icpt=2, reg=as.scalar(opt[1,1]), maxi = as.scalar(opt[1,2]), maxii= 0, verbose=FALSE);
+  # [M,pred,accuracy] = multiLogRegPredict(X=dX_test, B=B, Y=ytest, verbose=FALSE);
 
-  for(i in 1:ncol(mask))
-  {
-    if(as.scalar(mask[1, i]) == 1)
-    {
-      max_value = as.scalar(max(train_max_values[1, i], test_max_values[1, i]))
-      encoded = toOneHot(Xtrain[, i], max_value)
-      dX_train = cbind(dX_train, encoded)
-      encoded = toOneHot(Xtest[, i], max_value)
-      dX_test = cbind(dX_test, encoded)
-    }
-    else {
-      dX_train = cbind(dX_train, Xtrain[, i])
-      dX_test = cbind(dX_test, Xtest[, i])
-    }
-
-  }
-  # learn model
-  B = multiLogReg(X=dX_train, Y=ytrain, icpt=2, reg=0.00001, maxi = 50, maxii= 50, verbose=FALSE);
-  [M,pred,accuracy] = multiLogRegPredict(X=dX_test, B=B, Y=ytest, verbose=FALSE);
-
-  if(isWeighted) 
-    accuracy = getAccuracy(y=ytest, yhat=pred, isWeighted=isWeighted)
-  print("dirty accuracy "+accuracy)
+  # if(isWeighted) 
+    # accuracy = getAccuracy(y=ytest, yhat=pred, isWeighted=isWeighted)
+  print("cross validated dirty accuracy "+accuracy)
 }
 
 prioritise = function(Matrix[Double] X, Matrix[Double] y, Matrix[Double] mask)
@@ -419,24 +412,30 @@ return(Matrix[Double] sortedX, Matrix[Double] sortedY)
 dummycoding = function(Matrix[Double] X, Matrix[Double] mask)
 return (Matrix[Double] dX_train) {
 
-  Xtrain = replace(target = X, pattern = NaN, replacement=1)
+  idx = vectorToCsv(mask)
   
-  train_max_values = colMaxs(Xtrain)
-  dX_train = matrix(0,nrow(Xtrain),0)
-  # one-hot-encode the categorical features
-  for(i in 1:ncol(mask))
-  {
-    if(as.scalar(mask[1, i]) == 1)
-    {
-      max_value = max(train_max_values[1, i])
-      encoded = toOneHot(Xtrain[, i], max_value)
-      dX_train = cbind(dX_train, encoded)
-    }
-    else {
-      dX_train = cbind(dX_train, Xtrain[, i])
-    }
+  # specifications for one-hot encoding of categorical features
+  jspecDC = "{ids:true, dummycode:["+idx+"]}";
+  # OHE of categorical features
+  [dX_train, dM] = transformencode(target=as.frame(X), spec=jspecDC);
 
-  }
+  
+  # train_max_values = colMaxs(Xtrain)
+  # dX_train = matrix(0,nrow(Xtrain),0)
+  # # one-hot-encode the categorical features
+  # for(i in 1:ncol(mask))
+  # {
+    # if(as.scalar(mask[1, i]) == 1)
+    # {
+      # max_value = max(train_max_values[1, i])
+      # encoded = toOneHot(Xtrain[, i], max_value)
+      # dX_train = cbind(dX_train, encoded)
+    # }
+    # else {
+      # dX_train = cbind(dX_train, Xtrain[, i])
+    # }
+
+  # }
 }
 
 
@@ -507,3 +506,77 @@ return (Matrix[Double] loss) {
   # print("confusion matrix")
   # print(toString(confusionCount_c))
 }
+
+
+crossV = function(Matrix[double] X, Matrix[double] y, Integer k, Matrix[Double] mask,
+  Matrix[Double] MLhp, Boolean isWeighted) 
+return (Matrix[Double] accuracyMatrix)
+{
+
+  accuracyMatrix = matrix(0, k, 1)
+
+  dataList = list()
+  testL = list()
+  data = order(target = cbind(y, X),  by = 1, decreasing=FALSE, index.return=FALSE)
+  classes = table(data[, 1], 1)
+  ins_per_fold = classes/k
+  start_fold = matrix(1, rows=nrow(ins_per_fold), cols=1)
+  fold_idxes = cbind(start_fold, ins_per_fold)
+
+  start_i = 0; end_i = 0; idx_fold = 1;;
+  for(i in 1:k)
+  {
+    fold_i = matrix(0, 0, ncol(data))
+    start=0; end=0; 
+    for(j in 1:nrow(classes))
+    {
+      idx = as.scalar(classes[j, 1])
+      start = end + 1;
+      end = end + idx
+      class_j =  data[start:end, ]
+
+
+      start_i = as.scalar(fold_idxes[j, 1]);
+      end_i = as.scalar(fold_idxes[j, 2])
+
+      fold_i = rbind(fold_i, class_j[start_i:end_i, ])
+    }
+
+    dataList = append(dataList, fold_i)
+    fold_idxes[, 1] = fold_idxes[, 2] + 1
+    fold_idxes[, 2] += ins_per_fold
+    while(FALSE){}
+  }
+
+  for(i in seq(1,k))
+  {
+      [trainList, hold_out] = remove(dataList, i)
+      trainset = rbind(trainList)
+      testset = as.matrix(hold_out)
+      trainX = trainset[, 2:ncol(trainset)]
+      trainy = trainset[, 1]
+      testX = testset[, 2:ncol(testset)]
+      testy = testset[, 1]
+      beta = multiLogReg(X=trainX, Y=trainy, icpt=1, reg=as.scalar(MLhp[1,1]), tol= 1e-9, 
+      maxi=as.scalar(MLhp[1,2]), maxii= 50, verbose=FALSE);
+      [prob, yhat, a] = multiLogRegPredict(testX, beta, testy, FALSE)
+      accuracy = getAccuracy(testy, yhat, isWeighted)
+      accuracyMatrix[i] = accuracy
+  }
+
+}
+
+# remove empty wrapper for frames
+frameRemoveEmpty = function(Frame[Unknown] target, String margin, Matrix[Double] select)
+return (Frame[Unknown] frameblock)
+{
+  idx = seq(1, ncol(target))
+  # get the indexes of columns for recode transformation
+  index = vectorToCsv(idx)
+  # recode logical pipelines for easy handling
+  jspecR = "{ids:true, recode:["+index+"]}";
+  [X, M] = transformencode(target=target, spec=jspecR);
+  X = removeEmpty(target = X, margin = margin, select = select)
+  frameblock = transformdecode(target = X, spec = jspecR, meta = M)
+}
+

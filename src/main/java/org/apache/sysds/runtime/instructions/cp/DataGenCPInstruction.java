@@ -19,6 +19,7 @@
 
 package org.apache.sysds.runtime.instructions.cp;
 
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -414,13 +415,27 @@ public class DataGenCPInstruction extends UnaryCPInstruction {
 			}
 			else {
 				String[] data = frame_data.split(DataExpression.DELIM_NA_STRING_SEP);
-				if(data.length != schemaLength && data.length > 1)
+				int dataLength = data.length/lrows;
+				if(dataLength != dataLength && data.length > 1)
 					throw new DMLRuntimeException("data values should be equal to number of columns," +
 						" or a single values for all columns");
 				if(data.length > 1) {
 					soresFrame = new FrameBlock(vt);
-					for(int i = 0; i < lrows; i++)
-						soresFrame.appendRow(data);
+					if(data.length > lcols)
+					{
+						int beg = 0;
+						for(int i = 1; i <= lrows; i++) {
+							int end = lcols * i ;
+							String[] data1 = ArrayUtils.subarray(data, beg, end);
+							soresFrame.appendRow(data1);
+							beg = end ;
+						}
+
+					}
+					else {
+						for(int i = 0; i < lrows; i++)
+							soresFrame.appendRow(data);
+					}
 				}
 				else {
 					soresFrame = new FrameBlock(vt);

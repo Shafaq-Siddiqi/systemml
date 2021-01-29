@@ -34,6 +34,7 @@ s_executePipeline = function(Frame[String] pipeline, Matrix[Double] X,  Matrix[D
     while(FALSE){}
   }
   for(i in 1:ncol(pipeline)) {
+
     op = as.scalar(pipeline[1,i])
     [hp, withClass, dataFlag] = matrixToList(X, Y, mask, as.matrix(hyperParameters[i]), op)
     Xclone = X

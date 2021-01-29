@@ -41,17 +41,17 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
   
     # initialize output variables
   hparam = matrix(0, rows=k*(s_max+1), cols=55)
-  pipeline = frame("|", rows=k*(s_max+1), cols=ncol(lp)+1)
-  start=0; end=0;
+  pipeline = frame(0, rows=k*(s_max+1), cols=ncol(lp)+1)
+  startOut=0; endOut=0;
   for(s in s_max:0, check = 0) {
     
     # bracket_hp = list()
-    bracket_hp = matrix(0, rows=k*(s+1), cols=55)
-    bracket_pipel = matrix(0, rows=k*(s+1), cols=3)
-    
+    bracket_hp = matrix(0, rows=k*(s+1)+k, cols=55)
+    bracket_pipel = matrix(0, rows=k*(s+1)+k, cols=3)
+    start=1; end=0;
     n = ceil(floor(B/R/(s+1)) * eta^s);
+    [configurations, n] = get_physical_configurations(lp, n, primitives)
     r = R * eta^(-s);
-    configurations = get_physical_configurations(lp, n, primitives)
     # append configuration ids
     id = seq(1, nrow(configurations))
     configurations = cbind(as.frame(id), configurations)
@@ -62,7 +62,7 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
     
     for( i in 0:s,check=0 ) {
       # successive halving    
-      n_i = as.integer(floor(n * eta^(-i)));
+      n_i = min(max(as.integer(floor(n * eta^(-i))), 1), nrow(configurations));
       r_i = as.integer(floor(r * eta^i));
       
       if(verbose) {
@@ -70,6 +70,7 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
         print("no of resources --------------"+r_i)
         print("iteration  ---------------------"+i)
       }
+      # n_i = ifelse(n_i > nrow(configurations), nrow(configurations), n_i )
       configurations = configurations[1:n_i, ]
       print("conf successive halving")
       print(toString(configurations))
@@ -80,19 +81,33 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
       # a = frameSort(a)
       a = order(target = outPip, by = 1, decreasing=TRUE, index.return=FALSE)
       b = order(target = outHp, by = 1, decreasing=TRUE, index.return=FALSE)
-      rowIndex = ifelse(nrow(a) > k, k, nrow(a))
+      rowIndex = ifelse(nrow(a) >= k, k, nrow(a))
+            
+      print("resource optimized output")
+      print(toString(a))
+      while(FALSE){}
       # maintain the brackets results
       # 1:5, 6:10, 11:15
       # k*s+1, k*(s+1), s = 0, 1: 5, s=1,  6:10, s=2 11:15 
       # bracket_pipel = append(bracket_pipel, a[1:rowIndex,])
-      bracket_pipel[(k*i)+1:k*(1+i), ] =  a[1:rowIndex,]
-      bracket_hp[(k*i)+1:k*(1+i), 1:ncol(b)] =  b[1:rowIndex,]
+
+      end = end + rowIndex
+      bracket_pipel[start:end, ] =  a[1:rowIndex,]
+      bracket_hp[start:end, 1:ncol(b)] =  b[1:rowIndex,]
+      start = end + 1
+
+
+      
       # sort the configurations fro successive halving
-      avergae_perf =  getMaxPerConf(outPip, r_i)     #as.frame(aggregate(target=a[, 1], groups=a[, 2], fn="mean"))
+      avergae_perf =  getMaxPerConf(outPip)     #as.frame(aggregate(target=a[, 1], groups=a[, 2], fn="mean"))
+      print("configurations "+toString(configurations))
+      while(FALSE){}
       configurations = frameSort(cbind(avergae_perf, configurations))
       configurations = configurations[, 2:ncol(configurations)]
 
     }
+    bracket_pipel = removeEmpty(target=bracket_pipel, margin="rows")
+    bracket_hp = removeEmpty(target=bracket_hp, margin="rows")
     # keep the best k results for each bracket
     [bracket_bestPipeline, bracket_bestHyperparams] = extractBracketWinners(bracket_pipel, bracket_hp, k, lookup)
     
@@ -102,10 +117,10 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
     print(toString(bracket_bestHyperparams))  
 
     while(FALSE){}
-    start = end + 1
-    end = end + nrow(bracket_bestPipeline)
-    pipeline[(k*s)+1:k*(1+s), ] = bracket_bestPipeline
-    hparam[(k*s)+1:k*(1+s), 1:ncol(bracket_bestHyperparams)] = bracket_bestHyperparams
+    startOut = endOut + 1
+    endOut = endOut + nrow(bracket_bestPipeline)
+    pipeline[startOut: endOut, ] = bracket_bestPipeline
+    hparam[startOut:endOut, 1:ncol(bracket_bestHyperparams)] = bracket_bestHyperparams
   }
   
   print("after all brackets ")
@@ -134,7 +149,7 @@ m_bandit = function(Matrix[Double] X_train, Matrix[Double] Y_train, Matrix[Doubl
 #TODO resources and configuration
 get_physical_configurations = function(Frame[String] logical, Scalar[int] numConfigs, 
   Frame[Unknown] primitives)
-  return(Frame[String] physical)
+  return(Frame[String] physical, Double min)
 {
 
   # load the primitives
@@ -183,6 +198,8 @@ get_physical_configurations = function(Frame[String] logical, Scalar[int] numCon
     vect = removeEmpty(target = X[,j], margin = "rows");
     paramLens[j,1] = nrow(vect);
   }
+  min = sum(paramLens)
+  sample = ifelse(min > numConfigs, TRUE, FALSE)
    paramVals = matrix(0, ncol(logical), max(paramLens));
    for( j in 1:ncol(logical) ) {
     vect = removeEmpty(target = X[,j], margin = "rows");
@@ -190,8 +207,10 @@ get_physical_configurations = function(Frame[String] logical, Scalar[int] numCon
   }
   cumLens = rev(cumprod(rev(paramLens))/rev(paramLens));
   # materialize hyper-parameter combinations 
-  HP = matrix(0, numConfigs, ncol(logical));
-  pip = sample(numConfigs,numConfigs)
+  HP = matrix(0, min(numConfigs, min), ncol(logical));
+  if(sample) 
+    pip = sample(numConfigs,numConfigs)
+  else pip = seq(1,nrow(HP))
   for( i in 1:nrow(HP) ) {
     for( j in 1:ncol(logical) ) {
       HP[i,j] = paramVals[j,as.scalar((as.scalar(pip[i,1])/cumLens[j,1])%%paramLens[j,1]+1)];
@@ -206,8 +225,7 @@ get_physical_configurations = function(Frame[String] logical, Scalar[int] numCon
 run_with_hyperparam = function(Frame[Unknown] ph_pip, Integer r_i, Matrix[Double] X, Matrix[Double] Y,
   Matrix[Double] mask, Matrix[Double] MLhp, Frame[Unknown] schema, Frame[Unknown] param, Boolean isWeighted,
   Double testAccuracy, Integer cv=3, Boolean verbose)                    
-  return (Matrix[Double] output_operator, Matrix[Double] output_hyperparam)
-{
+  return (Matrix[Double] output_operator, Matrix[Double] output_hyperparam) {
 
   output_hp = matrix(0, nrow(ph_pip)*r_i, 50)
   output_accuracy = matrix(0, nrow(ph_pip)*r_i, 1)
@@ -221,14 +239,15 @@ run_with_hyperparam = function(Frame[Unknown] ph_pip, Integer r_i, Matrix[Double
   ph_pip = ph_pip[, 2:ncol(ph_pip)]
   for(i in 1:nrow(ph_pip))
   {
-    # execute configurations with r resources
-    for(r in 1:r_i)
-    {
-      hp = getHyperparam(ph_pip[i,], param)      
-      [X, Y] = executePipeline(ph_pip[i], X, Y, mask, schema, hp, FALSE)
 
-      # [X_val, Y_val] = executePipeline(ph_pip[i], X_val, Y_val, mask, schema, hp, FALSE)
-      # accuracy = fclassify(X, Y, X_val, Y_val, mask, isWeighted)
+    # execute configurations with r resources
+    hp = getHyperparam(ph_pip[i], param)  
+    while(FALSE){}
+    res_opt = isResourceOptimal(hp, FALSE)
+    r_i = ifelse(!(res_opt), 1, r_i)
+    for(r in 1:r_i)
+    {    
+      [X, Y] = executePipeline(ph_pip[i], X, Y, mask, schema, hp, FALSE)
       accuracy = fclassify(X, Y, mask, MLhp, testAccuracy, isWeighted, cv)
 
       hp_vec = listToVector(hp, FALSE)
@@ -241,12 +260,14 @@ run_with_hyperparam = function(Frame[Unknown] ph_pip, Integer r_i, Matrix[Double
       Y = clone_Y
       while(FALSE){}
       index = index + 1
+      hp = getHyperparam(ph_pip[i,], param)  
     }
+    
     X = clone_X
     Y = clone_Y
   }
-  output_hyperparam = cbind(output_accuracy, output_hp)
-  output_operator = cbind(output_accuracy, output_pipelines)
+  output_hyperparam = removeEmpty(target=cbind(output_accuracy, output_hp), margin="rows")
+  output_operator = removeEmpty(target=cbind(output_accuracy, output_pipelines) ,margin="rows")
 }
 
 # extract the hyper-parameters for pipelines
@@ -283,7 +304,7 @@ getHyperparam = function(Frame[Unknown] pipeline, Frame[Unknown]  hpList)
         paramValIndex = (no_of_param) + start
         minVal =  as.scalar(hpList[index, paramValIndex])
         maxVal = as.scalar(hpList[index, paramValIndex + 1])
-        [minVal, maxVal] = verifyHp(i, pipeline, minVal, maxVal, j)
+        # [minVal, maxVal] = verifyHp(i, pipeline, minVal, maxVal, j)
         if(type == "FP") {
           val = as.scalar(rand(rows=1, cols=1, min=minVal,
                           max=maxVal, pdf="uniform"));
@@ -348,107 +369,13 @@ fclassify = function(Matrix[Double] X, Matrix[Double] Y, Matrix[Double] mask, Ma
   else { 
     print("STARTING "+cv+" CROSS VALIDATIONS")
     # do the k = 3 cross validations
-    accuracyMatrix = crossV(X, Y, cv, mask, MLhp, isWeighted, testAccuracy)
+    accuracyMatrix = crossV(X, Y, cv, mask, MLhp, isWeighted)
     accuracyMatrix = removeEmpty(target=accuracyMatrix, margin="rows")
     acc = colMeans(accuracyMatrix)
     accuracy = as.scalar(acc[1,1])
     print("validation accuracy "+accuracy)
   }
 }
-
-# crossV = function(Matrix[double] X, Matrix[double] y, Integer k, Matrix[Double] mask,
-  # Matrix[Double] MLhp, Boolean isWeighted, Double testAccuracy) 
-# return (Matrix[Double] accuracyMatrix)
-# {
-
-  # accuracyMatrix = matrix(0, k, 2)
-
-  # trainL = list()
-  # testL = list()
-  # for(i in 1:k)
-  # {
-    # [trainX, trainy, testX, testy] = splitBalanced(X, y, 0.8, FALSE)
-    # trainL = append(trainL, cbind(trainX, trainy))
-    # testL = append(testL, cbind(testX, testy))
-    # X=rbind(testX,trainX)
-    # y = rbind(testy,trainy)
-    
-  # }
-  # for(i in 1:k)
-  # {
-      # trainX = as.matrix(trainL[i])
-      # testX = as.matrix(testL[i])
-      # trainy = trainX[,ncol(trainX)]
-      # testy = testX[,ncol(testX)]
-      # trainX =trainX[, 1:ncol(trainX)-1]
-      # testX =testX[, 1:ncol(testX)-1]
-      # beta = multiLogReg(X=trainX, Y=trainy, icpt=1, reg=as.scalar(MLhp[1,1]), tol= 1e-9, 
-      # maxi=as.scalar(MLhp[1,2]), maxii= 50, verbose=FALSE);
-      # [prob, yhat, a] = multiLogRegPredict(testX, beta, testy, FALSE)
-      # accuracy = getAccuracy(testy, yhat, isWeighted)
-      # splitAccuracy = accuracy
-      # accuracyMatrix[i, 1] = accuracy
-  # }
-
-# }
-crossV = function(Matrix[double] X, Matrix[double] y, Integer k, Matrix[Double] mask,
-  Matrix[Double] MLhp, Boolean isWeighted, Double testAccuracy) 
-return (Matrix[Double] accuracyMatrix)
-{
-
-  accuracyMatrix = matrix(0, k, 2)
-
-  dataList = list()
-  testL = list()
-  data = order(target = cbind(y, X),  by = 1, decreasing=FALSE, index.return=FALSE)
-  classes = table(data[, 1], 1)
-  ins_per_fold = classes/k
-  start_fold = matrix(1, rows=nrow(ins_per_fold), cols=1)
-  fold_idxes = cbind(start_fold, ins_per_fold)
-
-  start_i = 0; end_i = 0; idx_fold = 1;;
-  for(i in 1:k)
-  {
-    fold_i = matrix(0, 0, ncol(data))
-    start=0; end=0; 
-    for(j in 1:nrow(classes))
-    {
-      idx = as.scalar(classes[j, 1])
-      start = end + 1;
-      end = end + idx
-      class_j =  data[start:end, ]
-
-
-      start_i = as.scalar(fold_idxes[j, 1]);
-      end_i = as.scalar(fold_idxes[j, 2])
-
-      fold_i = rbind(fold_i, class_j[start_i:end_i, ])
-    }
-
-    dataList = append(dataList, fold_i)
-    fold_idxes[, 1] = fold_idxes[, 2] + 1
-    fold_idxes[, 2] += ins_per_fold
-    while(FALSE){}
-  }
-
-  for(i in seq(1,k))
-  {
-      [trainList, hold_out] = remove(dataList, i)
-      trainset = rbind(trainList)
-      testset = as.matrix(hold_out)
-      trainX = trainset[, 2:ncol(trainset)]
-      trainy = trainset[, 1]
-      testX = testset[, 2:ncol(testset)]
-      testy = testset[, 1]
-      beta = multiLogReg(X=trainX, Y=trainy, icpt=1, reg=as.scalar(MLhp[1,1]), tol= 1e-9, 
-      maxi=as.scalar(MLhp[1,2]), maxii= 50, verbose=FALSE);
-      [prob, yhat, a] = multiLogRegPredict(testX, beta, testy, FALSE)
-      accuracy = getAccuracy(testy, yhat, isWeighted)
-      accuracyMatrix[i, 1] = accuracy
-  }
-
-}
-
 
 
 # extract the top k pipelines
@@ -457,31 +384,82 @@ extractTopK = function(Frame[Unknown] pipeline, Matrix[Double] hyperparam,
   return (Frame[Unknown] bestPipeline, Matrix[Double] bestHyperparams)
 {
 
+  idx = vectorToCsv(seq(1, ncol(pipeline)))
+  jspecDC = "{ids:true, recode:["+idx+"]}";
+  # OHE of categorical features
+  [dpipeline, dM] = transformencode(target=pipeline, spec=jspecDC);
+  
+  
+  forDedup = cbind(dpipeline, hyperparam) 
+  print("forDedup=======")
+  print(toString(forDedup))
+  while(FALSE){}
+  dup = mdedup(cbind(pipeline, as.frame(hyperparam)), matrix(seq(2, ncol(forDedup)), 1, ncol(forDedup)-1), matrix(1,1,ncol(forDedup)-1), as.matrix(1), as.matrix(1), FALSE)
+  print("this is dup")
+  print(toString(dup))
+  while(FALSE){}
+  dedup =  removeEmpty(target= forDedup, margin="rows", select= (dup ==0))
+  
+  
+  duplicates =  removeEmpty(target = dup, margin="rows")
+
+  # get the counts
+  countDist = table(duplicates, 1) > 0
+  countDist = countDist * seq(1, nrow(countDist))
+  countsVal = removeEmpty(target= countDist, margin="rows")
+  print("--------- count val \n"+toString(countsVal))
+  while(FALSE){}
+  
+  # indexes = table((cumsum(counts) - counts) + 1, seq(1, nrow(f)),1, nrow(duplicates),nrow(duplicates))
+  # indexes = table(removeEmpty(target=counts, margin="rows"), seq(1, nrow(f)),1, nrow(duplicates),nrow(duplicates))
+  indexes = table(seq(1, nrow(countsVal)),countsVal,1,nrow(countsVal), cols=nrow(forDedup))
+  print("--------- duplicate[, 1] \n"+toString(duplicates))
+
+  print("--------- indexes \n"+toString(indexes))
+  print("--------- fordedup \n"+toString(forDedup))
+  while(FALSE){}
+  deduplicates = indexes %*% forDedup
+  forDedup = rbind(dedup, deduplicates)
+  decoded = transformdecode(target=forDedup[, 1:ncol(pipeline)], meta=dM, spec=jspecDC)
+  pipeline = decoded[, 1:ncol(pipeline)]
+  hyperparam = forDedup[, ncol(pipeline)+1:ncol(forDedup)]
+
   # sort results
   hyperparam = order(target = hyperparam, by = 1, decreasing=TRUE, index.return=FALSE)
   pipeline = frameSort(pipeline)
+  hyperparam = removeEmpty(target=hyperparam, margin="rows")
+  pipeline = pipeline[1:nrow(hyperparam), ]
+
+
+
+  # print(toString(dedeup))
+  # print("duplicates")
+  # print(toString(duplicates))
+  # print("no tups")
+  # print(toString(deduplicates))
+
   
-  if(as.scalar(pipeline[1,1]) < testAccuracy)
-  {
-    bestPipeline = pipeline[1,]
-    bestHyperparams = hyperparam[1,]
-  }
-  else {
-    # remove the row with accuracy less than test accuracy 
-    mask = (hyperparam[, 1] < testAccuracy) == 0
-    hyperparam = removeEmpty(target = hyperparam, margin = "rows", select = mask)
-    rowIndex = ifelse(nrow(hyperparam) > k, k, nrow(hyperparam))
-    # select the top k
-    bestPipeline = pipeline[1:rowIndex,]
-    bestHyperparams = hyperparam[1:rowIndex,]
-  }
+
+  # remove the row with accuracy less than test accuracy 
+  mask = (hyperparam[, 1] < testAccuracy) == 0
+  hyperparam = removeEmpty(target = hyperparam, margin = "rows", select = mask)
+  rowIndex = ifelse(nrow(hyperparam) > k, k, nrow(hyperparam))
+  # select the top k
+  bestPipeline = pipeline[1:rowIndex,]
+  bestHyperparams = hyperparam[1:rowIndex,]
+  
 }
+
+
 
 # extract the top k pipelines
 extractBracketWinners = function(Matrix[Double] pipeline, Matrix[Double] hyperparam, 
   Integer k, Frame[Unknown] conf)
   return (Frame[Unknown] bestPipeline, Matrix[Double] bestHyperparams)
 {
+  print("pipeline in bracket winner")
+  print(toString(pipeline))
+  while(FALSE){}
 
   # bestPipeline = frameSort(bestPipeline)
   hyperparam = order(target = hyperparam, by = 1, decreasing=TRUE, index.return=FALSE)
@@ -501,19 +479,6 @@ extractBracketWinners = function(Matrix[Double] pipeline, Matrix[Double] hyperpa
   
 }
 
-# remove empty wrapper for frames
-# frameRmEmpty = function(Frame[Unknown] frameblock, Matrix[Double] selectMatrix)
-# return (Frame[Unknown] frameblock)
-# {
-  # idx = seq(1, ncol(frameblock))
-  # # get the indexes of columns for recode transformation
-  # index = vectorToCsv(idx)
-  # # recode logical pipelines for easy handling
-  # jspecR = "{ids:true, recode:["+index+"]}";
-  # [X, M] = transformencode(target=frameblock, spec=jspecR);
-  # X = removeEmpty(target = X, margin = "rows", select = selectMatrix)
-  # frameblock = transformdecode(target = X, spec = jspecR, meta = M)
-# }
 
 
 # smote wrapper for doing relative over-sampling
@@ -583,80 +548,6 @@ return (Double minVal, Double maxVal) {
   
 }
 
-# smote_nc = function(Matrix[Double] X, Integer s = 200, Matrix[Double] mask, Integer k = 1, Boolean verbose = FALSE) 
-# return (Matrix[Double] Y) {
-
-  # if(s < 100 | (s%%100) != 0)
-  # {
-    # print("the number of samples should be an integral multiple of 100. Setting s = 100")
-    # s = 100
-  # }
-  
-  # if(k < 1) {
-    # print("k should not be less than 1. Setting k value to default k = 1.")
-    # k = 1
-  # }
-  
-  # # matrix to keep the index of KNN for each minority sample
-  # knn_index = matrix(0,k,nrow(X))
-  # # find nearest neighbour
-  # for(i in 1:nrow(X))
-  # {
-    # knn = nn(X, X[i, ], k)
-    # knn_index[, i] = knn
-  # }
-  
-  # # number of synthetic samples from each minority class sample
-  # iter = 0
-  # iterLim = (s/100)
-  # # matrix to store synthetic samples
-  # synthetic_samples = matrix(0, iterLim*ncol(knn_index), ncol(X))
-  
-  # # shuffle the nn indexes
-  # #rand_index =  ifelse(k < iterLim, sample(k, iterLim, TRUE, 42), sample(k, iterLim, 42))
-  # if (k < iterLim)
-    # rand_index = sample(k, iterLim, TRUE, 42);
-  # else
-    # rand_index = sample(k, iterLim, 42);
-
-  # while(iter < iterLim)
-  # {
-    # # pick the random NN
-    # knn_sample = knn_index[as.scalar(rand_index[iter+1]),] 
-    # # generate sample    
-    # for(i in 1:ncol(knn_index))
-    # {
-      # index = as.scalar(knn_sample[1,i])
-      # X_diff = X[index,] - X[i, ]
-      # gap = as.scalar(Rand(rows=1, cols=1, min=0, max=1, seed = 42))
-      # X_sys = X[i, ] + (gap*X_diff)
-      # synthetic_samples[iter*ncol(knn_index)+i,] = X_sys;
-    # }
-    # iter = iter + 1
-  # }
-
-  # Y = synthetic_samples
-  
-  # if(verbose)
-    # print(nrow(Y)+ " synthesized samples generated.")
-
-# }
-  
-
-
-# nn = function(Matrix[Double] X, Matrix[Double] instance, Integer k )
-# return (Matrix[Double] knn_)
-# {
-  # if(nrow(X) < k)
-    # stop("can not pick "+k+" nearest neighbours from "+nrow(X)+" total instances")
-
-  # # compute the euclidean distance
-  # diff = X - instance
-  # square_diff = diff^2
-  # distance = sqrt(rowSums(square_diff))
-  # sort_dist = order(target = distance, by = 1, decreasing= FALSE, index.return =  TRUE)
-  # knn_ = sort_dist[2:k+1,]
-# }
 
 downSample = function(Matrix[Double] X, matrix[Double] Y, Integer class)
 return (Matrix[Double] XY)
@@ -696,43 +587,53 @@ return(Matrix[Double] X){
 }
 
 
-dummycoding = function(Matrix[Double] X, Matrix[Double] mask)
-return (Matrix[Double] dX_train) {
-
-  Xtrain = replace(target = X, pattern = NaN, replacement=1)
-  
-  train_max_values = colMaxs(Xtrain)
-  dX_train = matrix(0,nrow(Xtrain),0)
-  # one-hot-encode the categorical features
-  for(i in 1:ncol(mask))
-  {
-    if(as.scalar(mask[1, i]) == 1)
-    {
-      max_value = max(train_max_values[1, i])
-      data = replace(target=Xtrain[, i], pattern=0, replacement=1)
-      encoded = toOneHot(data, max_value)
-      dX_train = cbind(dX_train, encoded)
-    }
-    else {
-      dX_train = cbind(dX_train, Xtrain[, i])
-    }
-
-  }
-}
-
-getMaxPerConf = function(Matrix[Double] pipelines, Double items)
+getMaxPerConf = function(Matrix[Double] pipelines)
 return (Frame[Unknown] maxperconf)
 {
-
-  start = 0
-  end = 0
+  print("pipelines in maxConf")
+  print(toString(pipelines))
+  tab = removeEmpty(target=table(pipelines[, 2], pipelines[, 3], pipelines[, 1]), margin="cols")
+  
+  print("pipelines in tab")
+  print(toString(tab))
+  # start = 0
+  # end = 0
   maxperconf = frame(0, rows=max(pipelines[, 2]), cols=1)
-  for(i in 1:nrow(maxperconf))
-  {
-    start = end + 1
-    end = end + items
-    sub = max(pipelines[start:end, 1])
-    # maxperconf[i, 1] = i
-    maxperconf[i, 1] = sub
-  }
+  maxperconf = as.frame(t(colMaxs(tab)))
+  print("pipelines in tab")
+  print(toString(maxperconf))
+  # for(i in 1:nrow(maxperconf))
+  # {
+    # start = end + 1
+    # end = end + items
+    # sub = max(pipelines[start:end, 1])
+    # # maxperconf[i, 1] = i
+    # maxperconf[i, 1] = sub
+  # }
+
+
+
+
 }
+
+isResourceOptimal = function(List[Unknown] param, Boolean verbose)
+return(Boolean validForResources) 
+{
+validForResources = FALSE
+
+  count = 0
+  for(i in 1:length(param))
+  {
+    hp = as.matrix(param[i])
+    if(ncol(hp) > 4)
+      count += 1
+  }
+  validForResources = count > 0
+}
+
+
+
+
+
+
+
