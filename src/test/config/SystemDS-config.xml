@@ -47,4 +47,6 @@
 
    <!-- The timeout of the federated tests to initialize the federated matrixes -->
    <sysds.federated.initialization.timeout>2</sysds.federated.initialization.timeout>
+   <!-- enables operator fusion via code generation, experimental feature -->
+    <sysds.codegen.enabled>true</sysds.codegen.enabled>
 </root>

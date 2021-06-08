@@ -2044,13 +2044,28 @@ public class FrameBlock implements CacheBlock, Externalizable  {
 	 * @return original frame where invalid values are replaced with null
 	 */
 	public FrameBlock dropInvalidType(FrameBlock schema) {
+		int left = 3;
+		int right = 3;
 		//sanity checks
 		if(this.getNumColumns() != schema.getNumColumns())
 			throw new DMLException("mismatch in number of columns in frame and its schema "+this.getNumColumns()+" != "+schema.getNumColumns());
-
+//		get the aveerage length for all the columns
+		double[] avgColLength = new double[this.getNumColumns()];
+		for(int k=0; k < this.getNumColumns(); k++)
+		{
+			String[] data = ((StringArray) this.getColumn(k))._data;
+			double avgLength = Arrays.stream(data)
+				.mapToDouble(String::length)
+				.average()
+				.getAsDouble();
+			avgColLength[k] = avgLength;
+		}
+		System.out.println("total columns "+this.getNumColumns());
+		System.out.println("average values in the column "+Arrays.toString(avgColLength));
 		String[] schemaString = schema.getStringRowIterator().next(); // extract the schema in String array
 		for (int i = 0; i < this.getNumColumns(); i++) {
 			Array obj = this.getColumn(i);
+
 			String schemaCol = schemaString[i];
 			String type;
 			if(schemaCol.contains("FP")){
@@ -2064,6 +2079,7 @@ public class FrameBlock implements CacheBlock, Externalizable  {
 				type = schemaCol;
 			}
 
+
 			for (int j = 0; j < this.getNumRows(); j++)
 			{
 				if(obj.get(j) == null)
@@ -2071,11 +2087,41 @@ public class FrameBlock implements CacheBlock, Externalizable  {
 				String dataValue = obj.get(j).toString().trim().replace("\"", "").toLowerCase() ;
 
 				ValueType dataType = isType(dataValue);
+//				get the avergae column length
 
 				if(!dataType.toString().contains(type) && !(dataType == ValueType.BOOLEAN && type.equals("INT")) &&
 					!(dataType == ValueType.BOOLEAN && type.equals("FP"))){
 					LOG.warn("Datatype detected: " + dataType + " where expected: " + schemaString[i] + " col: " +
 						(i+1) + ", row:" +(j+1));
+//					check the neighbours
+					int index = -1;
+					System.out.println("conflict "+dataType+" "+type+" "+dataValue);
+					for(int w=1; w<=left; w++) {
+						System.out.println("SCHEMA STRING WINDOW "+schemaString[j - w]+" j "+j+" w "+w);
+						if(schemaString[j - w].equals(dataType) & dataValue.length() <= avgColLength[j - w]) {
+							index = (j - w);
+							break;
+						}
+					}
+					if(index == -1)
+					{
+						for(int w=1; w<=right; w++)
+							if(schemaString[j + w].equals(dataType) &  dataValue.length() <= avgColLength[j + w])
+							{
+								index = (j-w);
+								break;
+							}
+					}
+					System.out.println("index value "+index);
+					if(index == -1)
+						System.out.println("could not fix this value");
+					else
+					{
+						System.out.println("TODO: fix it");
+
+					}
+
+
 
 					this.set(j,i,null);
 				}

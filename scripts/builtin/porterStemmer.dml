@@ -1,0 +1,161 @@
+#-------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+#-------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
+# Reference
+# Porter stemmer in Java. The original paper is in
+#   Porter, 1980, An algorithm for suffix stripping, Program, Vol. 14,
+#   no. 3, pp 130-137,
+# ----------------------------------------------------------------------------
+
+# Builtin function that corrects corrupted frames of strings
+# This algorithm operates on the assumption that most strings are correct
+# and simply swaps strings that do not occur often with similar strings that 
+# occur more often
+#
+# INPUT PARAMETERS:
+# ----------------------------------------------------------------------------
+# NAME                              TYPE      DEFAULT  MEANING
+# ----------------------------------------------------------------------------
+# strings                           String    ---      The nx1 input frame of corrupted strings
+# frequency_threshold               Double    0.05     Strings that occur above this frequency level will not be corrected
+# distance_threshold                integer   2        Max distance at which strings are considered similar
+# decapitalize                      Boolean   TRUE     Decapitalize all strings before correction
+# correct                           Boolean   TRUE     Correct strings or only report potential errors
+# is_verbose                        Boolean   FALSE    Print debug information
+#
+#
+# RETURN VALUES
+# ----------------------------------------------------------------------------
+# NAME     TYPE      DEFAULT  MEANING
+# ----------------------------------------------------------------------------
+# Y        Frame        -     Corrected nx1 output frame
+# ----------------------------------------------------------------------------
+
+{
+
+  private char[] b;
+  int i,     # offset into b 
+  i_end,    # offset to end of stemmed word 
+  j, k;
+  INC = 50;
+
+    # /* unit of size whereby b is increased */
+  b = new char[INC];
+  i = 0;
+  i_end = 0;
+  
+      # /**
+     # * Add a character to the word being stemmed.  When you are finished
+     # * adding characters, you can call stem(void) to stem the word.
+     # */
+
+}
+
+add = function(Frame[String] ch, Frame[String] b, integer i, integer inc) {
+  if (i == col(b)) {
+    new_b = frame("", rows=1, cols=i+inc);
+    b = new_b;
+  }
+  b[,(i+1):ncol(ch)] = ch;
+}
+
+  # /* cons(i) is true <=> b[i] is a consonant. */
+
+  
+isCons = function(String letter)
+(return isConst)
+{
+  isConst = TRUE
+  if(as.scalar(b[i]) == 'a' | as.scalar(b[i]) == 'e' | as.scalar(b[i]) == 'i' |
+  as.scalar(b[i]) == 'o' | as.scalar(b[i]) == 'u')
+  isConst = FALSE
+}
+
+isConsonant = function(String word, int i)
+  (return isConst)
+{
+  isConst = FALSE
+  letter = map(as.frame(word), "x -> x.chatAt("+i+")")
+  letter2 = map(as.frame(word), "x -> x.chatAt("+(i+1)+")")
+  letter = as.scalar(letter)
+  letter2 = as.scalar(letter2)
+  if(isCons(letter))
+    isConst = ifelse(letter == 'y' & isCons(letter2), FALSE, TRUE)
+}
+
+# TODO endsWith
+
+  # *d
+doubleCons = function(String stem)
+(return isTrue)
+{
+  len = map(stem, "s -> s.length()")
+  isCon = FALSE
+  if (len >= 2) {
+    isCon = (isConsonant(stem, len) & isConsonant(stem, len-1))
+  }     
+}
+{
+  # vowels = frame(["a", "e", "i", "o", "u"], rows=5, cols=1)
+  # isConst = as.scalar(b[i])
+  isConst = TRUE
+  if(as.scalar(b[i]) == 'a' | as.scalar(b[i]) == 'e' | as.scalar(b[i]) == 'i' |
+  as.scalar(b[i]) == 'o' | as.scalar(b[i]) == 'u')
+  isConst = FALSE
+  else if (as.scalar(b[i]) == 'y')
+  {
+    if(i == 0)
+      isConst = TRUE
+    else {
+      temp = cons(i - 1)
+      isConst = !(temp)
+    }
+  }
+}
+
+
+m = function() {
+  int n = 0;
+  int i = 0;
+  while (true) {
+    if (i > j) return n;
+      if (!cons(i)) break;
+        i++;
+  } 
+        i++;
+        while (true) {
+            while (true) {
+                if (i > j) return n;
+                if (cons(i)) break;
+                i++;
+            }
+            i++;
+            n++;
+            while (true) {
+                if (i > j) return n;
+                if (!cons(i)) break;
+                i++;
+            }
+            i++;
+        }
+    }
+
